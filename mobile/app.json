@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "Kite Algo",
+    "slug": "kite-algo",
+    "scheme": "kitealgo",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#EDF1F7",
+    "android": {
+      "package": "com.sasikumar.kitealgo",
+      "edgeToEdgeEnabled": true
+    },
+    "ios": {
+      "bundleIdentifier": "com.sasikumar.kitealgo"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-web-browser",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
+    ]
+  }
+}

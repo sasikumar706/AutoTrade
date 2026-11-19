@@ -1,0 +1,15 @@
+# /etc/systemd/system/kitealgo.service
+[Unit]
+Description=Kite Algo backend
+After=network-online.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/kite-algo-app/backend
+ExecStart=/home/ubuntu/kite-algo-app/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1
+Restart=always
+RestartSec=5
+Environment=TZ=Asia/Kolkata
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,5 @@
+# /etc/caddy/Caddyfile  — automatic HTTPS (Let's Encrypt). Point your domain's A record
+# at the server's static IP first. Replace algo.example.com with your domain.
+algo.example.com {
+    reverse_proxy 127.0.0.1:8000
+}
