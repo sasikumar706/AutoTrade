@@ -138,7 +138,7 @@ def make_auto(kite, **over):
                         "max_open_gap_pct": 5.0, "trend_override_min": 0, "consensus_min": 0, "any_strategy_entry": False,
                         "max_vix": 0, "min_adx": 0, "skip_lunch": False, "time_stop_bars": 0, "midday_repick": "",
                         "strict_proof": False, "day_builder": "off", "cooldown_after_loss_bars": 0, "quick_target_pts": 0, "iv_mode": "off", "min_move_cost_ratio": 0, "same_direction_mode": "off",
-                        "oi_walls": False, "stretch_mode": "off", **over})
+                        "oi_walls": False, "stretch_mode": "off", "max_stop_pts": 0, "max_target_pts": 0, **over})
     registered = []
     a = AutoTrader(cfg, deps, registered.append)
     return a, registered, hist
@@ -2414,3 +2414,21 @@ def test_profit_lock_steps_up():
     assert p.stats["locked_rs"] == 1500 and abs(p.stop - (e + 1500 / lot)) < 0.05
     p.on_tick(e + 1400 / lot)
     assert not p.is_open and p.exit_reason == "profit_lock"
+
+
+def test_stop_and_target_point_caps_buy_more_lots():
+    """A 112-pt stop / 224-pt target (BANKNIFTY example) is capped to 50 / 80 pts; the risk money buys more lots."""
+    wide = {"sl_mode": "points", "sl_value": 80.0, "target_mode": "rr", "target_value": 2.0,
+            "trail_mode": "none", "min_sl_pct": 1.0, "max_sl_pct": 90.0}
+    a0, _, _ = make_auto(FakeKite(), risk=wide, lots=10, max_daily_loss=60000.0, max_capital=10_000_000.0)
+    a1, _, _ = make_auto(FakeKite(), risk=wide, lots=10, max_daily_loss=60000.0, max_capital=10_000_000.0,
+                         max_stop_pts=50, max_target_pts=80)
+    for a in (a0, a1):
+        a.start_day(datetime(2026, 10, 28, 9, 0))
+        a.enabled, a.last_spot = True, 24010.0
+    s0, _, _ = a0._build_signal(1, None, datetime(2026, 10, 28, 9, 40, 1))
+    s1, _, _ = a1._build_signal(1, None, datetime(2026, 10, 28, 9, 40, 1))
+    e1 = s1["entry_price"]
+    assert abs(e1 - s1["stop_loss"]) <= 50.05 and abs(s1["target_price"] - e1) <= 80.05
+    assert abs(s0["entry_price"] - s0["stop_loss"]) > 70 and s1["lots"] >= s0["lots"]
+    assert any("more lots instead" in w["label"] for w in s1["why"])

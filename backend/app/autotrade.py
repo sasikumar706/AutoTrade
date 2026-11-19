@@ -189,6 +189,8 @@ class AutoConfig:
     auto_money: bool = True
     paper_capital: float = 300_000.0  # PAPER: pretend account size (LIVE uses the real Kite funds)
     max_auto_lots: int = 10  # automatic money: the most lots one trade may use (risk usually allows fewer)
+    max_stop_pts: float = 50.0  # premium points: the stop is never further than this from the entry (0 = off) —
+    max_target_pts: float = 80.0  # ...and the target never further than this; a tighter stop lets sizing use MORE lots
     # ---- money safety
     account_capital: float = 0.0  # your trading capital ₹ (0 = not set); each trade risks at most risk_per_trade_pct of it
     risk_per_trade_pct: float = 1.0
@@ -2216,6 +2218,29 @@ class AutoTrader:
                     pos.entry_band_pts = self._entry_band(ref)
                     pv = pos.preview(ref)
                     sig["why"].append({"group": "risk", "ok": True, "label": lab})
+                # points caps: a 100+ pt stop / 200+ pt target is a big, slow swing for an intraday option —
+                # cap them (default stop 50, target 80 premium pts) and let the money sizing buy more lots instead
+                d_stop = abs(pv["entry"] - pv["stop_loss"])
+                d_tgt = abs(pv["target"] - pv["entry"]) if pv.get("target") else None
+                if pside > 0 and ((cfg.max_stop_pts and d_stop > cfg.max_stop_pts + 1e-9)
+                                  or (cfg.max_target_pts and d_tgt and d_tgt > cfg.max_target_pts + 1e-9)):
+                    new_stop = min(d_stop, cfg.max_stop_pts) if cfg.max_stop_pts else d_stop
+                    new_tgt = min(d_tgt, cfg.max_target_pts) if (cfg.max_target_pts and d_tgt) else d_tgt
+                    capped = {**base_risk, "sl_mode": "points", "sl_value": round(new_stop, 1), "min_sl_pct": min(base_risk.get("min_sl_pct", 1.0), 1.0)}
+                    if base_risk.get("trail_mode") == "points":
+                        capped["trail_value"] = round(new_stop, 1)
+                    if new_tgt:
+                        capped["target_mode"], capped["target_value"] = "points", round(new_tgt, 1)
+                    try:
+                        p2 = ManagedPosition(spec, RiskConfig.from_dict(capped), cfg.mode, self.deps.kite_getter, slippage_bps=cfg.slippage_bps)
+                        p2.entry_band_pts = self._entry_band(ref)
+                        pv2 = p2.preview(ref)
+                        pos, pv, base_risk = p2, pv2, capped
+                        sig["why"].append({"group": "risk", "ok": True, "label":
+                                           f"Stop {d_stop:.0f} → {new_stop:.0f} pts, target "
+                                           f"{(f'{d_tgt:.0f} → {new_tgt:.0f}' if d_tgt else '—')} pts (your caps) — more lots instead"})
+                    except Exception:
+                        pass
                 budget0 = cfg.max_daily_loss + min(self.day_pnl, 0) - self.open_risk()
                 if cfg.autopilot:  # keep room for at least two trades a day
                     budget0 = min(budget0, cfg.max_daily_loss / 2)
