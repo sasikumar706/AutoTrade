@@ -390,6 +390,7 @@ class AutoTrader:
         self.iv_hist: dict[str, list] = {}  # index -> [[day, IV %], ...] samples of the traded option's IV
         self._oi_cache: dict = {}
         self.pending_pullback: dict | None = None  # a stretched signal waiting for a retest before entering
+        self.trend_note: str | None = None  # what the trend entry is waiting for (shown in the app)
         self._spot_trail: list[tuple[datetime, float]] = []  # recent index ticks for the live risk monitor
         self._risk_at: dict[str, float] = {}
         self._agree: dict[str, int] = {}  # position id -> % of indicators agreeing at the last candle
@@ -1852,6 +1853,11 @@ class AutoTrader:
     OVERRIDE_REARM_AT = 3  # after an override trade, re-arm once agreement for that direction drops to this or lower
     OVERRIDE_REARM_MIN = 20  # ...or once the last trade has been closed this long and the trend still holds
 
+    def trend_need(self) -> int:
+        """How many of the 6 indicator checks must agree for a trend entry. Autopilot: 5 unless you set otherwise."""
+        n = self.cfg.trend_override_min
+        return n if n > 0 else (5 if self.cfg.autopilot else 0)
+
     def _last_exit_time(self, now: datetime) -> datetime | None:
         last = None
         for p in self.all_positions():
@@ -1870,7 +1876,11 @@ class AutoTrader:
         trend to cool off (agreement drops to 3/6 or less) and build up again — so it re-enters a fresh push, not
         the same one. Daily trade/loss limits and stop-loss still apply."""
         cfg = self.cfg
-        if cfg.trend_override_min <= 0 or not self.enabled or self.paused or len(self.history) < 60:
+        need = self.trend_need()
+        if need <= 0 or not self.enabled or self.paused:
+            return
+        if len(self.history) < 60:
+            self.trend_note = "Trend entry: warming up (needs 60 candles of history)"
             return
         up = confirmations(self.history, 1)
         dn = confirmations(self.history, -1)
@@ -1892,13 +1902,22 @@ class AutoTrader:
                 self.log(f"Strong-trend override re-armed for {'UP' if d > 0 else 'DOWN'}: trend still {n_d}/6 "
                          f"{self.OVERRIDE_REARM_MIN} min after the last trade closed", "signal")
         if phase(now, cfg.analysis_start, cfg.entry_start, cfg.entry_end, cfg.exit_time, self.deps.data_dir) != "ENTRY":
+            self.trend_note = f"Trend entry: only between {cfg.entry_start} and {cfg.entry_end}"
             return
-        direction = 1 if nu >= cfg.trend_override_min and nd == 0 else -1 if nd >= cfg.trend_override_min and nu == 0 else 0
+        direction = 1 if nu >= need and nd == 0 else -1 if nd >= need and nu == 0 else 0
         if not direction:
+            self.trend_note = (f"Trend entry: {nu}↑ {nd}↓ of 6 at {candle['date']:%H:%M} — needs {need}+ one way and none against")
             return
         mark = f"override-used:{day}:{direction}"
-        if mark in self.processed or not self.slot_free():
+        if mark in self.processed:
+            le = self._last_exit_time(now)
+            self.trend_note = ("Trend entry: waiting for the open trade to close" if self.active_positions() else
+                               f"Trend entry used — re-arms at {le + timedelta(minutes=self.OVERRIDE_REARM_MIN):%H:%M} if the trend holds"
+                               if le else "Trend entry used — re-arms once the trade closes")
             return
+        if not self.slot_free():
+            return
+        self.trend_note = f"Trend entry taken at {candle['date']:%H:%M} ({nu if direction > 0 else nd}/6 agree)"
         self.processed.append(mark)
         key = f"override:{day}:{direction}:{candle['date']}"
         n = nu if direction > 0 else nd
@@ -3074,7 +3093,7 @@ class AutoTrader:
             "remaining_risk_budget": round(self.cfg.max_daily_loss + min(self.day_pnl, 0) - self.open_risk(), 2),
             "resume_pending": bool(getattr(self, "resume_pending", False)), "skips": self.skips,
             "loss_streak": self.loss_streak, "period_blocks": self.period_limits(datetime.now().date()),
-            "day_blocked": self.day_blocked, "levels": self.levels, "spot": self.last_spot,
+            "day_blocked": self.day_blocked, "levels": self.levels, "spot": self.last_spot, "trend_note": self.trend_note,
             "last_tick": self.last_tick.isoformat() if self.last_tick else None,
             "position": pos.snapshot() if pos else None, "last_signal": self.signals[-1] if self.signals else None,
             "signals": self.signals[-10:], "timeline": self.timeline[-60:],
@@ -3097,7 +3116,7 @@ class AutoTrader:
     def to_store(self) -> dict:
         return {"id": self.id, "config": asdict(self.cfg), "enabled": self.enabled, "paused": self.paused,
                 "state": self.state, "message": self.message, "day": self.day.isoformat() if self.day else None,
-                "trades_today": self.trades_today, "day_pnl": self.day_pnl, "day_blocked": self.day_blocked,
+                "trades_today": self.trades_today, "day_pnl": self.day_pnl, "day_blocked": self.day_blocked, "trend_note": self.trend_note,
                 "counts_for": self.counts_for.isoformat() if getattr(self, "counts_for", None) else None,
                 "processed": self.processed[-50:], "signals": self.signals[-20:], "timeline": self.timeline[-60:],
                 "position_id": self.position.id if self.position else None, "levels": self.levels,

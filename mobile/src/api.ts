@@ -123,7 +123,7 @@ export type PositionSnap = {
 export type AutoSnap = {
   id: string; config: Record<string, any>; enabled: boolean; paused: boolean; state: string; message: string;
   day: string | null; trades_today: number; realized_pnl: number; unrealized_pnl: number; remaining_risk_budget: number;
-  day_blocked: string | null; levels: Record<string, any>; spot: number | null; last_tick: string | null;
+  day_blocked: string | null; trend_note?: string | null; levels: Record<string, any>; spot: number | null; last_tick: string | null;
   position: PositionSnap | null; last_signal: Record<string, any> | null; signals: Record<string, any>[];
   timeline: { t: string; kind: string; msg: string }[];
   ai_pick?: AiPick | null; ai_picking?: boolean; watch?: Watch | null; day_build?: Record<string, any> | null; day_building?: boolean;

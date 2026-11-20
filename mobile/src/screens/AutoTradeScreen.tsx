@@ -815,9 +815,11 @@ export function AutoDetailScreen({ route, navigation }: any) {
         const ch = w?.change, chp = w?.change_pct;
         const pnl = (a.realized_pnl ?? 0) + (a.unrealized_pnl ?? 0);
         const st = a.state;
-        const rejected = st.includes("REJECT") && !a.day_blocked;
+        const fresh = sig?.signal_time ? Date.now() - new Date(sig.signal_time).getTime() < 15 * 60_000 : false;
+        const rejected = st.includes("REJECT") && !a.day_blocked && fresh;  // an old skip shouldn't sit there all day
         const tone = a.day_blocked ? C.red : rejected ? C.amber : autoStateColor(st);
         const stateText = a.day_blocked ?? (rejected ? `Last signal skipped — ${a.message}`
+          : st.includes("REJECT") ? (w?.status ?? a.trend_note ?? "Watching for the next setup")
           : `${st.replace(/_/g, " ").toLowerCase().replace(/^./, (x) => x.toUpperCase())} — ${a.message}`);
         return (
           <View style={[s.card, { gap: 14 }]}>
@@ -914,6 +916,7 @@ export function AutoDetailScreen({ route, navigation }: any) {
           <PositionRow p={a.position} onPress={() => navigation.navigate("Position", { id: a.position!.id })} onClose={closePos} />
         </Card>
       ) : null}
+      {a.enabled && a.trend_note ? <Card><Text style={{ color: C.text, fontWeight: "700" }}>📈 {a.trend_note}</Text></Card> : null}
       {a.enabled ? <WatchCard w={a.watch} index={c.index} autoMoney={!!a.money} hidePrice /> : (
         <Card><Text style={s.muted}>Tap ▶ Start to see the live price, which way the market leans and the next order it expects.</Text></Card>
       )}

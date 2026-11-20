@@ -227,6 +227,7 @@ function NextTrade({ a }: { a: AutoSnap }) {
           <View style={{ flex: down, backgroundColor: C.red }} />
         </View>
       ) : null}
+      {a.trend_note ? <Text style={{ color: C.text, fontSize: 13, marginTop: 8 }}>📈 {a.trend_note}</Text> : null}
       {o?.tradingsymbol ? (
         <View style={{ marginTop: 12, padding: 10, borderRadius: 10, backgroundColor: C.cardHi }}>
           <Text style={{ color: C.text, fontWeight: "800" }}>{o.action?.replace("_", " ")} {o.tradingsymbol}</Text>
