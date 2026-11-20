@@ -2432,3 +2432,23 @@ def test_stop_and_target_point_caps_buy_more_lots():
     assert abs(e1 - s1["stop_loss"]) <= 50.05 and abs(s1["target_price"] - e1) <= 80.05
     assert abs(s0["entry_price"] - s0["stop_loss"]) > 70 and s1["lots"] >= s0["lots"]
     assert any("more lots instead" in w["label"] for w in s1["why"])
+
+
+def test_trend_override_rearms_after_last_trade_closed_in_a_steady_trend(monkeypatch):
+    """Steady trend (stays 5-6/6, never cools to 3): re-armed 20 min after the last trade closed."""
+    import app.autotrade as at
+    a, _, _ = make_auto(FakeKite(), max_daily_loss=100000.0, trend_override_min=5)
+    a.start_day(datetime(2026, 10, 28, 9, 0))
+    a.enabled, a.last_spot = True, 24000.0
+    up6 = [{"group": "indicators", "ok": True, "label": "x"}] * 6
+    no6 = [{"group": "indicators", "ok": False, "label": "x"}] * 6
+    monkeypatch.setattr(at, "confirmations", lambda df, d: up6 if d > 0 else no6)
+    a.try_trend_override({"date": datetime(2026, 10, 28, 9, 40)}, datetime(2026, 10, 28, 9, 45, 10))
+    assert len(a.signals) == 1
+    a.position = None
+    monkeypatch.setattr(a, "active_positions", lambda: [])
+    monkeypatch.setattr(a, "_last_exit_time", lambda now: datetime(2026, 10, 28, 10, 0))
+    a.try_trend_override({"date": datetime(2026, 10, 28, 10, 10)}, datetime(2026, 10, 28, 10, 15, 10))
+    assert len(a.signals) == 1  # only 15 min since the exit
+    a.try_trend_override({"date": datetime(2026, 10, 28, 10, 20)}, datetime(2026, 10, 28, 10, 25, 10))
+    assert len(a.signals) == 2  # 25 min later, trend still on -> joins again

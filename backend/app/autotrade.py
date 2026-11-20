@@ -1850,6 +1850,19 @@ class AutoTrader:
                                       + ". Exits when fewer than 2 still agree or the other side reaches the threshold, or at stop/target/time.")
 
     OVERRIDE_REARM_AT = 3  # after an override trade, re-arm once agreement for that direction drops to this or lower
+    OVERRIDE_REARM_MIN = 20  # ...or once the last trade has been closed this long and the trend still holds
+
+    def _last_exit_time(self, now: datetime) -> datetime | None:
+        last = None
+        for p in self.all_positions():
+            if p.state == "POSITION_CLOSED" and p.exit_time:
+                try:
+                    t = datetime.fromisoformat(p.exit_time).replace(tzinfo=None)
+                except ValueError:
+                    continue
+                if t.date() == now.date() and t <= now and (last is None or t > last):
+                    last = t
+        return last
 
     def try_trend_override(self, candle: dict, now: datetime):
         """Strong-trend override: when the strategy has no signal but nearly all indicator checks agree on the
@@ -1863,11 +1876,21 @@ class AutoTrader:
         dn = confirmations(self.history, -1)
         nu, nd = sum(c["ok"] for c in up), sum(c["ok"] for c in dn)
         day = now.date()
+        last_exit = self._last_exit_time(now)
         for d, n_d in ((1, nu), (-1, nd)):  # re-arm a direction once its agreement has cooled off
             mark = f"override-used:{day}:{d}"
-            if n_d <= self.OVERRIDE_REARM_AT and mark in self.processed:
+            if mark not in self.processed:
+                continue
+            if n_d <= self.OVERRIDE_REARM_AT:
                 self.processed.remove(mark)
                 self.log(f"Strong-trend override re-armed for {'UP' if d > 0 else 'DOWN'} ({n_d}/6 now agree)", "signal")
+            elif (not self.active_positions() and last_exit is not None
+                  and now - last_exit >= timedelta(minutes=self.OVERRIDE_REARM_MIN)):
+                # a steady trend never cools to 3/6 — once the last trade is closed and some time has passed,
+                # the trend still holding is reason enough to join it again (loss cool-down and day limits still apply)
+                self.processed.remove(mark)
+                self.log(f"Strong-trend override re-armed for {'UP' if d > 0 else 'DOWN'}: trend still {n_d}/6 "
+                         f"{self.OVERRIDE_REARM_MIN} min after the last trade closed", "signal")
         if phase(now, cfg.analysis_start, cfg.entry_start, cfg.entry_end, cfg.exit_time, self.deps.data_dir) != "ENTRY":
             return
         direction = 1 if nu >= cfg.trend_override_min and nd == 0 else -1 if nd >= cfg.trend_override_min and nu == 0 else 0
