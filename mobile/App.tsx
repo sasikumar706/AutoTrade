@@ -21,6 +21,7 @@ import ZerodhaScreen from "./src/screens/ZerodhaScreen";
 import SwingScreen from "./src/screens/SwingScreen";
 import { MODE_INFO, ModeChip, ModeProvider, useMode } from "./src/mode";
 import AutoHomeScreen from "./src/screens/AutoHomeScreen";
+import PnlHistoryScreen from "./src/screens/PnlHistoryScreen";
 import { C } from "./src/ui";
 import { CrashGuard, installGlobalErrorHandler } from "./src/CrashGuard";
 
@@ -89,6 +90,8 @@ function Root() {
         <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: "Settings" }} />
         <Stack.Screen name="OptionsResult" component={OptionsResultScreen} options={{ title: "Options backtest" }} />
         <Stack.Screen name="Position" component={PositionScreen} options={{ title: "Position" }} />
+        <Stack.Screen name="PnlHistory" component={PnlHistoryScreen}
+          options={({ route }: any) => ({ title: `${route?.params?.mode === "live" ? "Live" : "Paper"} P&L history` })} />
         <Stack.Screen name="Quote" component={QuoteScreen} options={{ title: "Quote" }} />
         <Stack.Screen name="AutoAdvanced" component={AutoTradeScreen} options={{ title: "My own strategies" }} />
         <Stack.Screen name="AutoDetail" component={AutoDetailScreen} options={{ title: "Auto Trade" }} />

@@ -803,7 +803,9 @@ export function AutoDetailScreen({ route, navigation }: any) {
 
   if (!a) return <Screen><ErrorText msg={err} /><Text style={s.muted}>Loading…</Text></Screen>;
   const c = a.config;
-  const sig = a.last_signal;
+  const today = new Date().toLocaleDateString("en-CA");
+  const sigs = a.signals.filter((x: any) => String(x.signal_time ?? "").slice(0, 10) === today);  // a fresh page every day
+  const sig = sigs.length ? sigs[sigs.length - 1] : null;
   const posActive = a.position && !["POSITION_CLOSED", "ORDER_REJECTED"].includes(a.position.state);
   return (
     <Screen>
@@ -896,7 +898,7 @@ export function AutoDetailScreen({ route, navigation }: any) {
 
       <TabBar value={tab} onChange={setTab} tabs={[
         { key: "now", label: "Now" }, { key: "ai", label: c.strategy_source === "ai" ? "AI pick" : "Strategy" },
-        { key: "orders", label: `Orders · ${a.signals.length}` }, { key: "stats", label: "Stats" },
+        { key: "orders", label: `Orders · ${sigs.length}` }, { key: "stats", label: "Stats" },
         { key: "settings", label: "Settings" }, { key: "log", label: "Log" }]} />
 
 {tab === "now" && (<>
@@ -1003,7 +1005,7 @@ export function AutoDetailScreen({ route, navigation }: any) {
       </>)}
 
 {tab === "orders" && (<>
-      {a.signals.length === 0 ? <Card><Text style={s.muted}>No signals yet today. Each signal shows here with its reasons, placed or skipped.</Text></Card> : (
+      {sigs.length === 0 ? <Card><Text style={s.muted}>No signals yet today. Each signal shows here with its reasons, placed or skipped.</Text></Card> : (
         <View style={{ flexDirection: "row" }}><IconBtn icon="🗑" label="Clear order history" onPress={() => confirmClear("clear_signals")} loading={busy === "clear_signals"} /></View>
       )}
       {sig && (
@@ -1025,9 +1027,9 @@ export function AutoDetailScreen({ route, navigation }: any) {
         </Card>
       )}
 
-      {a.signals.length > 1 && (
-        <Card title="Earlier signals">
-          {[...a.signals].reverse().slice(1, 10).map((x, i) => (
+      {sigs.length > 1 && (
+        <Card title="Earlier today">
+          {[...sigs].reverse().slice(1, 10).map((x, i) => (
             <Pressable key={i} onPress={() => setOpenSig(openSig === i ? null : i)}
               style={{ paddingVertical: 8, borderTopWidth: i ? 1 : 0, borderTopColor: C.border, gap: 6 }}>
               <View style={s.row}>

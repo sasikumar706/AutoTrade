@@ -126,6 +126,7 @@ export default function HomeScreen({ navigation }: any) {
             <Text style={{ color: C.amber }}>Live orders need a static-IP server with LIVE_TRADING_ENABLED=true.</Text>
           )}
           <Btn label={mode === "paper" ? "Open paper trading" : "Open live trading"} kind={mode === "live" ? "warn" : "primary"} onPress={goTrade} />
+          <Btn label="📅 P&L history" kind="ghost" onPress={() => navigation.navigate("PnlHistory", { mode })} />
         </Card>
       )}
 

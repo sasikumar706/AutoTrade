@@ -160,7 +160,11 @@ export default function TradeTicket({ mode, navigation, liveEnabled = false, pre
       <Btn label={mode === "live" ? `Place LIVE ${side === "BUY" ? "BUY" : "SELL"} order` : `Place paper ${side === "BUY" ? "BUY" : "SELL"}`}
         kind={mode === "live" ? "warn" : "primary"} onPress={onPlace} loading={busy} disabled={blocked} />
 
-      <DayHistory mode={mode} navigation={navigation} />
+      <TodayTrades positions={positions} navigation={navigation} />
+      <Pressable onPress={() => navigation.navigate("PnlHistory", { mode })}
+        style={{ paddingVertical: 12, alignItems: "center", borderRadius: 12, borderWidth: 1, borderColor: C.border, backgroundColor: C.card }}>
+        <Text style={{ color: C.blue, fontWeight: "800" }}>📅 P&L history (earlier days) ›</Text>
+      </Pressable>
     </>
   );
 }
@@ -211,6 +215,24 @@ export function DayHistory({ mode, navigation, reload }: { mode: "paper" | "live
       {days.length > 7 && (
         <Text onPress={() => setMore(!more)} style={{ color: C.blue, fontWeight: "700", paddingTop: 8 }}>
           {more ? "Show last 7 days" : `Show all ${days.length} days`}</Text>
+      )}
+    </Card>
+  );
+}
+
+/** Today's closed trades only — every day starts a fresh page; earlier days are on the P&L history screen. */
+function TodayTrades({ positions, navigation }: { positions: PositionSnap[]; navigation: any }) {
+  const today = new Date().toLocaleDateString("en-CA");
+  const list = positions.filter((p) => p.state === "POSITION_CLOSED" && String(p.exit_time ?? p.entry_time ?? "").slice(0, 10) === today);
+  const net = list.reduce((a, p) => a + (p.net ?? 0), 0);
+  const wins = list.filter((p) => (p.net ?? 0) > 0).length;
+  return (
+    <Card title="Today's closed trades" right={list.length ? <Text style={{ color: pnlColor(net), fontWeight: "900" }}>{inr(net, 0)}</Text> : undefined}>
+      {list.length === 0 ? <Text style={s.muted}>None yet today.</Text> : (
+        <>
+          <Text style={s.muted}>{list.length} trade{list.length === 1 ? "" : "s"} · {wins} won · {list.length - wins} lost</Text>
+          {list.map((p) => <PositionRow key={p.id} p={p} onPress={() => navigation.navigate("Position", { id: p.id })} />)}
+        </>
       )}
     </Card>
   );
