@@ -25,6 +25,7 @@ export default function SwingScreen({ navigation, route }: any) {
   const [book, setBook] = useState<"0" | "4" | "6">("6");
   const [trail, setTrail] = useState<"0" | "3" | "4">("0");
   const [guard, setGuard] = useState<"0" | "1.5" | "2" | "2.5">("2");
+  const [maxLoss, setMaxLoss] = useState<"2" | "3" | "1" | "0">("2");
   const [mode, setMode] = useState<"paper" | "live">("paper");
 
   const load = useCallback(async () => {
@@ -50,6 +51,7 @@ export default function SwingScreen({ navigation, route }: any) {
       setItm(String(c.itm_strikes ?? 2) as any); setBook((["0", "4", "6"].includes(String(c.book_half_pct)) ? String(c.book_half_pct) : "6") as any);
       setTrail((["0", "3", "4"].includes(String(c.trail_atr)) ? String(c.trail_atr) : "0") as any);
       setGuard((["0", "1.5", "2", "2.5"].includes(String(c.crash_guard_atr ?? 2)) ? String(c.crash_guard_atr ?? 2) : "2") as any);
+      setMaxLoss((["0", "1", "2", "3"].includes(String(c.max_loss_pct ?? 2)) ? String(c.max_loss_pct ?? 2) : "2") as any);
     }
   }, [detail?.id]);
 
@@ -210,7 +212,7 @@ export default function SwingScreen({ navigation, route }: any) {
       </Card>
 
       {w && (
-        <Section title="⚙️ Settings" summary={`${w.config.sizing === "capital" ? `${w.config.alloc_pct}% of money, max ${w.config.max_lots} lots` : `${w.config.lots} lot`} · ${w.config.itm_strikes ?? 2} ITM · guard ${w.config.crash_guard_atr ? `${w.config.crash_guard_atr} ATR` : "off"} · book half ${w.config.book_half_pct ? `+${w.config.book_half_pct}%` : "off"}${w.config.trail_atr ? ` · trail ${w.config.trail_atr} ATR` : ""} · check ${w.config.check_time} · stop −${w.config.disaster_stop_pct}%${w.config.max_premium ? ` · cap ₹${w.config.max_premium}` : ""}`}>
+        <Section title="⚙️ Settings" summary={`${w.config.sizing === "capital" ? `${w.config.alloc_pct}% of money, max ${w.config.max_lots} lots` : `${w.config.lots} lot`} · ${w.config.itm_strikes ?? 2} ITM · guard ${w.config.crash_guard_atr ? `${w.config.crash_guard_atr} ATR` : "off"} · book half ${w.config.book_half_pct ? `+${w.config.book_half_pct}%` : "off"}${w.config.trail_atr ? ` · trail ${w.config.trail_atr} ATR` : ""} · check ${w.config.check_time} · ${w.config.max_loss_pct ? `max loss ${w.config.max_loss_pct}%` : `stop −${w.config.disaster_stop_pct}%`}${w.config.max_premium ? ` · cap ₹${w.config.max_premium}` : ""}`}>
           <Text style={s.label}>Money</Text>
           <Chips options={["paper", "live"] as const} value={mode} onChange={setMode}
             labels={{ paper: "📝 Paper (simulated)", live: "💹 Live (real money)" }} />
@@ -240,6 +242,9 @@ export default function SwingScreen({ navigation, route }: any) {
           <Text style={s.label}>Lock profit: book half the lots when the index is up</Text>
           <Chips options={["6", "4", "0"] as const} value={book} onChange={setBook} labels={{ "6": "+6% (recommended)", "4": "+4%", "0": "Off" }} />
           <Hint>More trades end in profit and the money swings less; in exchange the biggest trends earn a bit less. Needs 2+ lots.</Hint>
+          <Text style={s.label}>Max loss per trade (sets the stop-loss)</Text>
+          <Chips options={["2", "1", "3", "0"] as const} value={maxLoss} onChange={setMaxLoss}
+            labels={{ "2": "2% of money (recommended)", "1": "1%", "3": "3%", "0": "Off (−60% stop)" }} />
           <Text style={s.label}>Crash guard — watched every minute while holding</Text>
           <Chips options={["2", "1.5", "2.5", "0"] as const} value={guard} onChange={setGuard}
             labels={{ "2": "2 daily ranges (recommended)", "1.5": "1.5", "2.5": "2.5", "0": "Off" }} />
@@ -248,7 +253,7 @@ export default function SwingScreen({ navigation, route }: any) {
           <Chips options={["0", "3", "4"] as const} value={trail} onChange={setTrail} labels={{ "0": "Off", "3": "3 daily ranges", "4": "4 daily ranges" }} />
           <Btn label="Save" onPress={() => run("save", () => api.updateSwing(w.id, { ...w.config, mode, sizing, lots: Number(lots) || 1, max_premium: Number(maxPrem) || 0,
             capital: Number(capital) || 200000, alloc_pct: Number(alloc), max_lots: Number(maxLots) || 10,
-            itm_strikes: Number(itm), book_half_pct: Number(book), trail_atr: Number(trail), crash_guard_atr: Number(guard) }))}
+            itm_strikes: Number(itm), book_half_pct: Number(book), trail_atr: Number(trail), crash_guard_atr: Number(guard), max_loss_pct: Number(maxLoss) }))}
             loading={busy === "save"} />
           {!open && <Btn label="Delete this swing strategy" kind="ghost" onPress={() =>
             Alert.alert("Delete?", "Its trades stay in your history.", [{ text: "Cancel", style: "cancel" },
@@ -273,7 +278,7 @@ export default function SwingScreen({ navigation, route }: any) {
         <Btn label="Create (paper)" onPress={() => run("create", async () => {
           const c = await api.createSwing({ index: newIx, lots: Number(lots) || 1, mode: "paper", max_premium: Number(maxPrem) || 0,
             sizing, capital: Number(capital) || 200000, alloc_pct: Number(alloc), max_lots: Number(maxLots) || 10,
-            itm_strikes: Number(itm), book_half_pct: Number(book), trail_atr: Number(trail), crash_guard_atr: Number(guard) });
+            itm_strikes: Number(itm), book_half_pct: Number(book), trail_atr: Number(trail), crash_guard_atr: Number(guard), max_loss_pct: Number(maxLoss) });
           setSel(c.id);
         })} loading={busy === "create"} />
       </Card>

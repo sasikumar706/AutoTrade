@@ -143,6 +143,7 @@ class SwingRequest(BaseModel):
     roll_days: int = 7
     check_time: str = "15:15"
     disaster_stop_pct: float = 60.0
+    max_loss_pct: float = 2.0
     max_premium: float = 0.0
     sizing: str = "capital"
     capital: float = 200000.0

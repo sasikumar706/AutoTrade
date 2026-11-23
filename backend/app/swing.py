@@ -44,6 +44,7 @@ class SwingConfig:
     roll_days: int = 7  # roll to the next monthly when this many days or fewer are left
     check_time: str = "15:15"  # daily decision time (IST)
     disaster_stop_pct: float = 60.0  # emergency stop on the premium; the trend exit is the normal exit
+    max_loss_pct: float = 2.0  # one trade never loses more than this % of the strategy's money: the stop is set so (0 = off)
     max_premium: float = 0.0  # ₹ cap on premium per entry (0 = no cap)
     sizing: str = "capital"  # capital = lots grow/shrink with your money | fixed = always `lots`
     capital: float = 200_000.0  # starting money for capital sizing (profits and losses of this strategy are added)
@@ -79,6 +80,8 @@ class SwingConfig:
             raise ValueError("Crash guard must be 0-6 daily ranges")
         if not (1 <= self.itm_strikes <= 3) or not (0 <= self.book_half_pct <= 20) or not (0 <= self.trail_atr <= 8):
             raise ValueError("ITM strikes 1-3, book-half 0-20%, trailing 0-8 ATR")
+        if not (0 <= self.max_loss_pct <= 20):
+            raise ValueError("Max loss per trade must be 0-20% of the money")
         if not (20 <= self.disaster_stop_pct <= 90):
             raise ValueError("Emergency stop must be 20-90% of the premium")
         return self
@@ -470,6 +473,8 @@ class SwingTrader:
             self._changed()
             return self.signal
 
+    MIN_STOP_PCT = 10  # a swing stop closer than this to the entry is just daily noise — use fewer lots instead
+
     def _open(self, now: datetime, roll: bool = False):
         cfg = self.cfg
         inst = self.deps.instruments()
@@ -489,7 +494,9 @@ class SwingTrader:
         q = self.deps.quote([key]).get(key, {})
         depth = q.get("depth") or {}
         ask = ((depth.get("sell") or [{}])[0] or {}).get("price") or None
-        ref = float(ask or q.get("last_price") or 0)
+        ltp = float(q.get("last_price") or 0)
+        # the best offer, unless the book is thin and it sits far above the last trade (then the last trade is the honest price)
+        ref = float(ask) if ask and (not ltp or ask <= ltp * 1.03) else ltp
         if not ref:
             self.log(f"No price for {c.tradingsymbol} — not buying", "alert")
             return None
@@ -498,10 +505,23 @@ class SwingTrader:
             cap_note = f"your premium cap ₹{cfg.max_premium:,.0f}" if cfg.max_premium else f"this strategy's money ₹{self.equity:,.0f}"
             self.log(f"1 lot of {c.tradingsymbol} costs ₹{ref * c.lot_size:,.0f}, more than {cap_note} allows — not buying", "alert")
             return None
+        stop_pct, cap_note = cfg.disaster_stop_pct, ""
+        if cfg.max_loss_pct:
+            cap = self.equity * cfg.max_loss_pct / 100
+            fit = int(cap // (self.MIN_STOP_PCT / 100 * ref * c.lot_size))  # lots that still leave a stop of >= 10%
+            if fit < 1:
+                self.log(f"1 lot of {c.tradingsymbol} (₹{ref * c.lot_size:,.0f}) can't keep a loss under ₹{cap:,.0f} "
+                         f"({cfg.max_loss_pct:g}% of ₹{self.equity:,.0f}) without a stop tighter than {self.MIN_STOP_PCT}% — not buying", "alert")
+                return None
+            if fit < lots:
+                why += f"; {fit} lot{'s' if fit > 1 else ''} to keep the loss under ₹{cap:,.0f}"
+                lots = fit
+            stop_pct = min(cfg.disaster_stop_pct, cap / (lots * c.lot_size * ref) * 100)
+            cap_note = f" · max loss ₹{cap:,.0f} ({cfg.max_loss_pct:g}% of money)"
         spec = PositionSpec(exchange=c.exchange, tradingsymbol=c.tradingsymbol, instrument_token=c.instrument_token,
                             lots=lots, lot_size=c.lot_size, side=1, product="NRML", tick_size=c.tick_size,
                             instrument_type="CE", strike=c.strike, expiry=c.expiry, source=f"swing:{self.id}", tag="kaswing")
-        risk = RiskConfig.from_dict({"sl_mode": "pct", "sl_value": cfg.disaster_stop_pct, "target_mode": "none",
+        risk = RiskConfig.from_dict({"sl_mode": "pct", "sl_value": round(stop_pct, 2), "target_mode": "none",
                                      "trail_mode": "none", "min_sl_pct": 1.0, "max_sl_pct": 95.0})
         p = ManagedPosition(spec, risk, cfg.mode, self.deps.kite_getter)
         p.stats.update({"entry_type": "swing", "why": [f"{cfg.fast}/{cfg.slow}-day trend UP", "roll" if roll else "new trend"],
@@ -511,7 +531,7 @@ class SwingTrader:
         p.open(ref)
         self.position = p
         self.log(f"Bought {lots} lot{'s' if lots > 1 else ''} {c.tradingsymbol} (strike {c.strike:g}, expiry {c.expiry}) at ~₹{ref:.2f} "
-                 f"= ₹{ref * lots * c.lot_size:,.0f} premium ({why}) · emergency stop −{cfg.disaster_stop_pct:g}%", "order")
+                 f"= ₹{ref * lots * c.lot_size:,.0f} premium ({why}) · stop −{stop_pct:.0f}%{cap_note}", "order")
         return p
 
     # ---------------------------------------------------------- control / persistence

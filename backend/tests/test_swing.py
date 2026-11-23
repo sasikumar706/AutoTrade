@@ -74,7 +74,8 @@ def test_uptrend_buys_monthly_itm_ce_with_enough_days():
     assert p.spec.expiry == "2026-11-24" or str(p.spec.expiry)[:10] == "2026-11-24"  # 27 days left >= 20
     assert p.spec.strike == 24100.0  # two strikes in the money (default)
     assert p.state == "POSITION_OPEN" and p.target is None
-    assert p.stop == pytest.approx(p.entry_price * 0.4, rel=0.02)  # 60% emergency stop
+    loss_at_stop = (p.entry_price - p.stop) * p.spec.qty
+    assert loss_at_stop == pytest.approx(200000 * 0.02, rel=0.03)  # stop set so one trade loses at most 2% of the money
     w.on_clock(now + timedelta(minutes=2))  # once a day only
     assert len(reg) == 1
     assert w.signal["trend"] == "UP"
@@ -237,3 +238,16 @@ def test_backtest_crash_guard_exits_on_big_down_day():
     assert any(t.get("crash_guard") for t in g["list"])
     n = backtest(df, SwingConfig(crash_guard_atr=0.0), lot=65, step=50.0)
     assert not any(t.get("crash_guard") for t in n["list"])
+
+
+def test_loss_cap_off_keeps_emergency_stop_and_cap_trims_lots():
+    w, reg, _ = make_swing(trend=+10.0, max_loss_pct=0)
+    w.enabled = True
+    w.on_clock(datetime(2026, 10, 28, 15, 16))
+    p = reg[0]
+    assert p.stop == pytest.approx(p.entry_price * 0.4, rel=0.02)  # 60% emergency stop
+    w2, reg2, _ = make_swing(trend=+10.0, alloc_pct=40.0)  # money allows 4 lots, the 2% loss cap allows 2
+    w2.enabled = True
+    w2.on_clock(datetime(2026, 10, 28, 15, 16))
+    q = reg2[0]
+    assert q.spec.lots == 2 and (q.entry_price - q.stop) * q.spec.qty <= 200000 * 0.02 * 1.03
