@@ -30,7 +30,7 @@ from .market_calendar import is_trading_day, parse_hm, phase
 from .options import (bs_delta, chain, daily_levels, expiries, implied_vol, index_cfg, nearest_future, pivots, select_contract,
                       spot_instrument, years_to_expiry)
 from .positions import ACTIVE_STATES, ManagedPosition, PositionSpec
-from .risk import RiskConfig, RiskError
+from .risk import RiskConfig, RiskError, round_tick
 from .strategies import REGISTRY, get_strategy
 
 LATEST_EXIT = "15:15"  # Zerodha squares off F&O MIS around 15:20-15:25; exit before that
@@ -1242,20 +1242,25 @@ class AutoTrader:
                 self._on_candle(done.as_dict(), now)
             ph = phase(now, self.cfg.analysis_start, self.cfg.entry_start, self.cfg.entry_end, self.cfg.exit_time, self.deps.data_dir)
             pos = self.position
-            # cutoff exit is enforced regardless of enabled/paused
-            if ph == "AFTER_CUTOFF" and pos is not None:
-                if pos.is_open:
-                    self.log("Exit cutoff reached — closing position", "risk")
-                    pos.request_exit("time_cutoff")
-                elif pos.state == "ENTRY_PENDING" and pos.mode == "live" and not getattr(pos, "cancel_sent", False):
-                    self._cancel_entry(pos, "cutoff")
-            if (pos is not None and pos.state == "ENTRY_PENDING" and pos.mode == "live" and pos.entry_limit is not None
-                    and not getattr(pos, "cancel_sent", False)
-                    and (now - datetime.fromisoformat(pos.created)).total_seconds() > self.cfg.signal_valid_seconds):
-                self.log(f"Entry LIMIT {pos.entry_limit} not filled within {self.cfg.signal_valid_seconds}s — price ran away; cancelling", "risk")
-                self._cancel_entry(pos, "limit not filled in time")
-            if pos is not None and pos.state in ("EXIT_FAILED",) and pos.ltp is not None:
-                pos.on_tick(pos.ltp)  # drives exit retries
+            # every position this Auto Trade holds (the main one AND earlier ones still running), not just the newest
+            for p in self.active_positions():
+                # cutoff exit is enforced regardless of enabled/paused
+                if ph == "AFTER_CUTOFF":
+                    if p.is_open:
+                        self.log(f"Exit cutoff reached — closing {p.spec.tradingsymbol}", "risk")
+                        p.request_exit("time_cutoff")
+                    elif p.state == "ENTRY_PENDING" and p.mode == "live" and not getattr(p, "cancel_sent", False):
+                        self._cancel_entry(p, "cutoff")
+                if (p.state == "ENTRY_PENDING" and p.mode == "live" and p.entry_limit is not None
+                        and not getattr(p, "cancel_sent", False)):
+                    age = (now - datetime.fromisoformat(p.created)).total_seconds()
+                    if age > self.cfg.signal_valid_seconds:
+                        self.log(f"Entry LIMIT {p.entry_limit} not filled within {self.cfg.signal_valid_seconds}s — price ran away; cancelling", "risk")
+                        self._cancel_entry(p, "limit not filled in time")
+                    elif age > self.cfg.signal_valid_seconds / 3:
+                        self._chase_entry(p)
+                if p.state == "EXIT_FAILED" and p.ltp is not None:
+                    p.on_tick(p.ltp)  # drives exit retries
             if ph != "AFTER_CUTOFF":
                 for p in self.active_positions():
                     if p.is_open:
@@ -1365,6 +1370,38 @@ class AutoTrader:
                                         f"(limit {self.cfg.max_consecutive_losses}); a fresh start tomorrow")
                     self.log(self.day_blocked, "risk")
             self._set("POSITION_CLOSED" if pos.state == "POSITION_CLOSED" else "ORDER_REJECTED", pos.message)
+
+    CHASE_MAX_BANDS = 3  # a re-priced LIMIT entry may pay at most this many entry bands above the original quote
+
+    def _chase_entry(self, pos: ManagedPosition) -> bool:
+        """LIVE LIMIT entry not filled yet: re-price it ONCE to the current ask + band, if the ask has not run more than
+        a few bands away from the signal's quote. More fills on a small tick-up, still no chasing a runaway move."""
+        if getattr(pos, "chased", False) or not pos.entry_order_id or pos.ref_price is None or pos.entry_band_pts is None:
+            return False
+        pos.chased = True
+        try:
+            key = f"{pos.spec.exchange}:{pos.spec.tradingsymbol}"
+            ltp, bid, ask = _best_prices(self.deps.quote([key]).get(key) or {})
+            s = pos.spec.side
+            now_px = (ask if s > 0 else bid) or ltp
+            if not now_px:
+                return False
+            new = max(round_tick(now_px + s * pos.entry_band_pts, pos.spec.tick_size), pos.spec.tick_size)
+            far = pos.ref_price + s * self.CHASE_MAX_BANDS * max(pos.entry_band_pts, pos.spec.tick_size)
+            if (new - pos.entry_limit) * s <= 0:
+                return False  # current limit is still at/above the market: just wait
+            if (new - far) * s > 0:
+                self.log(f"Entry not filled and {pos.spec.tradingsymbol} ran to {now_px:.2f} (signal quote {pos.ref_price:.2f}) — "
+                         f"too far to re-price; will cancel if it doesn't come back", "risk")
+                return False
+            pos.kite.modify_order(variety="regular", order_id=pos.entry_order_id, order_type="LIMIT", price=new)
+            pos.event("order", f"Entry LIMIT re-priced {pos.entry_limit} → {new} (market {now_px:.2f}) to get filled")
+            self.log(f"Entry LIMIT re-priced {pos.entry_limit} → {new} for {pos.spec.tradingsymbol}", "order")
+            pos.entry_limit = new
+            return True
+        except Exception as e:
+            pos.event("alert", f"Could not re-price the entry ({e}); original LIMIT still working")
+            return False
 
     def _cancel_entry(self, pos: ManagedPosition, why: str):
         pos.cancel_sent = True  # send the cancel once; the order update / reconciliation finishes it
@@ -1536,9 +1573,11 @@ class AutoTrader:
     def _entry_band(self, premium: float) -> float:
         """LIMIT entry room above the quote. Automatic: 0.5% of the premium, between ₹0.5 and ₹5
         (a ₹800 BANKNIFTY option often has a ₹2-3 spread, so ₹1 of room misses fills)."""
+        auto = round(min(5.0, max(0.5, premium * 0.005)), 2)
         if self.cfg.autopilot and self.cfg.auto_money:
-            return round(min(5.0, max(0.5, premium * 0.005)), 2)
-        return self.cfg.entry_tolerance_pts
+            return auto
+        # your fixed room, but never so little that a normal ₹300+ premium tick-up misses the fill
+        return max(float(self.cfg.entry_tolerance_pts or 0), auto) if self.cfg.entry_tolerance_pts else 0.0
 
     def apply_auto_money(self, now: datetime) -> dict | None:
         """Autopilot sizing: everything comes from the account size and today's conditions, on the safe side.
@@ -2376,12 +2415,13 @@ class AutoTrader:
                 problems.append(f"{type(e).__name__}: {e}")
         sig["risk_problems"] = problems
         sig["risk_check"] = "PASS" if not problems else "FAIL"
-        if sig.get("entry_price") is not None and cfg.entry_tolerance_pts:
-            band = max(sig["entry_price"] + (1 if pside > 0 else -1) * cfg.entry_tolerance_pts, 0.05)
+        room = self._entry_band(sig["entry_price"]) if sig.get("entry_price") is not None else 0.0
+        if sig.get("entry_price") is not None and room:
+            band = max(sig["entry_price"] + (1 if pside > 0 else -1) * room, 0.05)
             sig["entry_limit"] = round(band, 2)
             sig["why"].append({"group": "contract", "ok": True, "label":
                                f"LIMIT entry: {'buy at or below' if pside > 0 else 'sell at or above'} ₹{band:.2f} "
-                               f"(quote {sig['entry_price']} {'+' if pside > 0 else '−'} ₹{cfg.entry_tolerance_pts:g}); cancelled if not filled in {cfg.signal_valid_seconds}s"})
+                               f"(quote {sig['entry_price']} {'+' if pside > 0 else '−'} ₹{room:g}); re-priced once if the market ticks up, cancelled if not filled in {cfg.signal_valid_seconds}s"})
         if sig.get("est_max_loss") is not None:
             sig["why"].append({"group": "risk", "ok": not problems, "label":
                                f"Stop-loss {sig['stop_loss']}, target {sig['target_price']} → max loss ≈ ₹{sig['est_max_loss']:,.0f}, "

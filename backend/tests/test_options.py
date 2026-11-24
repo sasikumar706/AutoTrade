@@ -1636,7 +1636,7 @@ def test_auto_money_sizes_everything_from_capital_and_conditions():
     assert m["risk_pct"] == 0.25 and len(m["why_lower"]) == 2  # 1% x 0.5 x 0.5
     assert a._entry_band(100.0) == 0.5 and a._entry_band(300.0) == 1.5 and a._entry_band(900.0) == 4.5 and a._entry_band(2000.0) == 5.0
     b, _, _ = make_auto(FakeKite(), autopilot=False)
-    assert b.apply_auto_money(datetime(2026, 10, 28, 9, 0)) is None and b._entry_band(300.0) == b.cfg.entry_tolerance_pts
+    assert b.apply_auto_money(datetime(2026, 10, 28, 9, 0)) is None and b._entry_band(100.0) == b.cfg.entry_tolerance_pts and b._entry_band(300.0) == 1.5
 
 
 def test_setup_quality_scales_risk_and_lots():

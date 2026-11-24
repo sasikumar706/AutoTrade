@@ -271,9 +271,9 @@ class ManagedPosition:
                     self._close(min(ltp, self.stop) if s > 0 else max(ltp, self.stop), reason)
                     return
                 # live: broker SL order should fill; recover if it doesn't
-                if self.beyond_stop_since is None:
-                    self.beyond_stop_since = now
-                elif now - self.beyond_stop_since >= SL_FILL_GRACE_S or not self.sl_order_id:
+                if self.beyond_stop_since is None and self.sl_order_id:
+                    self.beyond_stop_since = now  # give the exchange SL order a few seconds to fill
+                elif not self.sl_order_id or now - self.beyond_stop_since >= SL_FILL_GRACE_S:
                     self.stats["stop_recoveries"] += 1
                     self.event("alert", "Stop breached but SL order not filled — sending recovery market exit")
                     self.request_exit(reason)
@@ -304,6 +304,10 @@ class ManagedPosition:
         return round_tick(self.entry_price + self.spec.side * (self.stats.get("locked_rs") or 0) / lot, self.spec.tick_size)
 
     def _modify_sl(self, new_stop: float):
+        if not self.sl_order_id:  # no exchange SL order (rejected / not placed): the app-side stop still trails
+            self.stop = new_stop
+            self.event("trail", f"Trailing stop moved to {new_stop} (app-side)")
+            return
         side = -self.spec.side
         price = round_tick(new_stop * (1 - SL_LIMIT_BUFFER) if side < 0 else new_stop * (1 + SL_LIMIT_BUFFER), self.spec.tick_size)
         try:
@@ -370,6 +374,7 @@ class ManagedPosition:
                 self.partial_order_id = self._order(transaction_type=self._txn(-self.spec.side), quantity=qty,
                                                     order_type="MARKET", market_protection=-1)
                 self.partial_pending = {"qty": qty, "reason": reason}
+                self.stats["partial_ids"] = (self.stats.get("partial_ids") or []) + [self.partial_order_id]
                 self.event("order", f"Partial exit order {self.partial_order_id}: selling {qty} ({reason})", order_id=self.partial_order_id)
                 return True
             except Exception as e:
@@ -402,6 +407,11 @@ class ManagedPosition:
                 self._close((self.ltp or self.entry_price) * (1 - self.slip * self.spec.side), reason)
                 return
             self.set_state("EXIT_PENDING", f"Exiting ({reason})")
+            if self.partial_pending:  # a scale-out order is in flight: settle it first so we never sell more than we hold
+                self.reconcile()
+                if self.state == "POSITION_CLOSED":
+                    return
+                self.state = "EXIT_PENDING"
             if self.sl_order_id:
                 try:
                     self.kite.cancel_order(variety="regular", order_id=self.sl_order_id)
@@ -413,9 +423,16 @@ class ManagedPosition:
                         return
             self._send_exit(reason)
 
+    def _pending_partial_qty(self) -> int:
+        return int((self.partial_pending or {}).get("qty") or 0) if self.mode == "live" else 0
+
     def _send_exit(self, reason: str):
+        qty = self.filled_qty - self._pending_partial_qty()  # never sell the part a pending scale-out order is selling
+        if qty <= 0:
+            self.event("alert", "Exit skipped: the pending partial-exit order covers the whole position")
+            return
         try:
-            self.exit_order_id = self._order(transaction_type=self._txn(-self.spec.side), quantity=self.filled_qty,
+            self.exit_order_id = self._order(transaction_type=self._txn(-self.spec.side), quantity=qty,
                                              order_type="MARKET", market_protection=-1)
             self.state = "EXIT_PENDING"
             self.event("order", f"Exit order {self.exit_order_id} sent ({reason})", order_id=self.exit_order_id)
@@ -439,6 +456,10 @@ class ManagedPosition:
         return gross, ch
 
     def _close(self, price: float, reason: str):
+        pend = self._pending_partial_qty()
+        if pend:
+            self.event("alert", f"Partial-exit order for {pend} still unconfirmed at close — check it in Kite")
+            self.filled_qty -= pend
         q = self.filled_qty
         self.exit_price = price
         self.exit_reason = reason
@@ -512,17 +533,30 @@ class ManagedPosition:
             return "unknown"
         mine = [o for o in orders if o.get("tradingsymbol") == self.spec.tradingsymbol and (o.get("tag") or "") == self.spec.tag[:20]]
         by_id = {str(o["order_id"]): o for o in mine}
+        dead = ("REJECTED", "CANCELLED")
         if self.entry_order_id is None and self.state == "RECONCILIATION_REQUIRED" and self.entry_price is None:
-            entries = [o for o in mine if o.get("transaction_type") == self._txn(self.spec.side)]
+            # only orders placed after this position was created (an earlier trade in the same contract is not ours)
+            entries = [o for o in mine if o.get("transaction_type") == self._txn(self.spec.side)
+                       and o.get("order_type") in ("MARKET", "LIMIT") and _placed_after(o, self.created)]
             if entries:
                 self.entry_order_id = str(entries[-1]["order_id"])
                 by_id[self.entry_order_id] = entries[-1]
             else:
                 self.set_state("ORDER_REJECTED", "Entry order not found in Kite order book — nothing was placed")
                 return "none"
+        if self.state == "RECONCILIATION_REQUIRED" and self.entry_price is not None and self.exit_order_id is None:
+            # an exit whose submission timed out may still have reached Kite: adopt it instead of selling twice
+            known = {self.entry_order_id, self.sl_order_id, self.partial_order_id, *(self.stats.get("partial_ids") or [])}
+            exits = [o for o in mine if o.get("transaction_type") == self._txn(-self.spec.side) and o.get("order_type") == "MARKET"
+                     and str(o["order_id"]) not in known and o.get("status") not in dead and _placed_after(o, self.entry_time)]
+            if exits:
+                self.exit_order_id = str(exits[-1]["order_id"])
+                self.event("order", f"Reconciled: found exit order {self.exit_order_id} in Kite", order_id=self.exit_order_id)
         for oid in (self.entry_order_id, self.sl_order_id, self.partial_order_id, self.exit_order_id):
             if oid and oid in by_id:
                 self.on_order_update(by_id[oid])
+        if self.state == "RECONCILIATION_REQUIRED" and self.exit_order_id and self.entry_price is not None:
+            self.state = "EXIT_PENDING"  # exit order is live in Kite: wait for its fill
         if self.state == "POSITION_CLOSED":
             return "closed"
         if self.state == "RECONCILIATION_REQUIRED" and self.exit_order_id is None and self.entry_price is not None:
@@ -573,6 +607,19 @@ class ManagedPosition:
 
 def _r(x):
     return round(x, 2) if isinstance(x, (int, float)) else x
+
+
+def _placed_after(o: dict, since: str | None, slack_s: float = 120.0) -> bool:
+    """True when a Kite order was placed after `since` (iso time), with some clock slack. Unknown times count as True."""
+    ts = o.get("order_timestamp") or o.get("exchange_timestamp")
+    if not ts or not since:
+        return True
+    try:
+        t = ts if isinstance(ts, datetime) else datetime.fromisoformat(str(ts).replace(" ", "T"))
+        s0 = datetime.fromisoformat(since)
+        return (t.replace(tzinfo=None) - s0.replace(tzinfo=None)).total_seconds() >= -slack_s
+    except (TypeError, ValueError):
+        return True
 
 
 def _is_uncertain(e: Exception) -> bool:

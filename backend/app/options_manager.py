@@ -300,6 +300,7 @@ class OptionsManager:
             w.wait_cross = bool(d.get("wait_cross", False))
             if d.get("position_id") in self.positions:
                 w.position = self.positions[d["position_id"]]
+            w.closing = [self.positions[i] for i in d.get("closing_ids", []) if i in self.positions]
             self.swings[w.id] = w
 
     def reconcile_all(self) -> dict:

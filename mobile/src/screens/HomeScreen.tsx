@@ -8,6 +8,7 @@ import { PositionRow } from "./TradeTicket";
 import MorningCard from "../MorningCard";
 import { IndexTicker, useIndexMoves } from "../IndexTicker";
 import { Badge, Btn, C, Card, ErrorText, Row, Screen, Stat, pnlColor, s, Hint } from "../ui";
+import { Detail } from "../view";
 
 export default function HomeScreen({ navigation }: any) {
   const [status, setStatus] = useState<AuthStatus | null>(null);
@@ -126,7 +127,7 @@ export default function HomeScreen({ navigation }: any) {
             <Text style={{ color: C.amber }}>Live orders need a static-IP server with LIVE_TRADING_ENABLED=true.</Text>
           )}
           <Btn label={mode === "paper" ? "Open paper trading" : "Open live trading"} kind={mode === "live" ? "warn" : "primary"} onPress={goTrade} />
-          <Btn label="📅 P&L history" kind="ghost" onPress={() => navigation.navigate("PnlHistory", { mode })} />
+          <Detail><Btn label="📅 P&L history" kind="ghost" onPress={() => navigation.navigate("PnlHistory", { mode })} /></Detail>
         </Card>
       )}
 
@@ -140,6 +141,7 @@ export default function HomeScreen({ navigation }: any) {
         </Card>
       )}
 
+      <Detail>
       {status?.logged_in && (
         <Pressable onPress={() => navigation.navigate("Zerodha")}>
           <Card title="📒 Zerodha account" right={<Text style={{ color: C.blue, fontWeight: "800" }}>Open ›</Text>}>
@@ -151,6 +153,7 @@ export default function HomeScreen({ navigation }: any) {
       <Btn label="✦ AI Strategy Finder" kind="ghost" onPress={() => navigation.navigate("Finder")} />
 
       <MorningCard enabled={!!status?.logged_in} />
+      </Detail>
 
     </Screen>
   );

@@ -320,7 +320,7 @@ export default function AiScreen({ navigation, route }: any) {
             {!res.ai_available ? <Text style={s.muted}>Tip: add ANTHROPIC_API_KEY to backend/.env for a deeper Claude-written analysis.</Text> : null}
           </Card>
 
-          <Card title="Market view" right={<Badge text={snap.verdict} color={verdictColor(snap.verdict)} />}>
+          <Card detail title="Market view" right={<Badge text={snap.verdict} color={verdictColor(snap.verdict)} />}>
             <ScoreBar score={snap.score} />
             <Row gap={8}>
               <Stat label="Score" value={`${snap.score > 0 ? "+" : ""}${snap.score}`} color={verdictColor(snap.verdict)} />
@@ -394,7 +394,7 @@ export default function AiScreen({ navigation, route }: any) {
         </>
       )}
 
-      <Card title={`Past analyses (${history.length})`} right={history.length ? (
+      <Card detail title={`Past analyses (${history.length})`} right={history.length ? (
         <Pressable onPress={clearAll} hitSlop={10}><Text style={{ color: C.red, fontWeight: "700" }}>Clear all</Text></Pressable>
       ) : null}>
         {history.length === 0 ? <Text style={s.muted}>None saved. Analyses are kept here (latest 50) while "Save to past analyses" is on.</Text> : history.map((it) => (

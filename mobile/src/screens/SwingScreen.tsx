@@ -150,7 +150,7 @@ export default function SwingScreen({ navigation, route }: any) {
       )}
 
       {w && (w.trades?.length ?? 0) > 0 && (
-        <Section title="📒 Swing trades" summary={`${w.trades.length} · net ${inr(w.trades.reduce((a: number, t: any) => a + (t.net ?? 0), 0))}`}>
+        <Section detail title="📒 Swing trades" summary={`${w.trades.length} · net ${inr(w.trades.reduce((a: number, t: any) => a + (t.net ?? 0), 0))}`}>
           {w.trades.map((t: any) => (
             <Pressable key={t.id} onPress={() => navigation.navigate("Position", { id: t.id })}
               style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: C.border }}>
@@ -166,7 +166,7 @@ export default function SwingScreen({ navigation, route }: any) {
         </Section>
       )}
 
-      <Card title="📊 How this rule did on past data">
+      <Card detail title="📊 How this rule did on past data">
         <Hint>Runs the same rule on up to 10 years of daily {w?.config.index ?? newIx} candles from Kite, 1 lot, option priced from India VIX.</Hint>
         <Btn label={busy === "bt" ? "Testing…" : `Test on ${w?.config.index ?? newIx}`} kind="ghost" onPress={() => runBacktest(w?.config.index ?? newIx)} loading={busy === "bt"} />
         {bt && (<>
@@ -262,7 +262,7 @@ export default function SwingScreen({ navigation, route }: any) {
       )}
 
       {w && (w.timeline?.length ?? 0) > 0 && (
-        <Section title="📜 Log" summary={w.timeline[w.timeline.length - 1]?.msg}>
+        <Section detail title="📜 Log" summary={w.timeline[w.timeline.length - 1]?.msg}>
           {[...w.timeline].reverse().slice(0, 30).map((e: any, i: number) => (
             <Text key={i} style={[s.muted, { fontSize: 13 }]}>{when(e.t)} · {e.msg}</Text>
           ))}

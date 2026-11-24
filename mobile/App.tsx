@@ -24,6 +24,7 @@ import AutoHomeScreen from "./src/screens/AutoHomeScreen";
 import PnlHistoryScreen from "./src/screens/PnlHistoryScreen";
 import { C } from "./src/ui";
 import { CrashGuard, installGlobalErrorHandler } from "./src/CrashGuard";
+import { ViewChip, ViewProvider } from "./src/view";
 
 installGlobalErrorHandler();
 
@@ -59,7 +60,8 @@ function Tabs() {
       headerStyle: { backgroundColor: C.card }, headerShadowVisible: false,
       headerTitleStyle: { color: C.ink, fontWeight: "800", fontSize: 19 },
       headerRight: () => (
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingRight: 14 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingRight: 14 }}>
+          <ViewChip />
           <ModeChip onPress={() => navigation.navigate("Settings")} />
           <Pressable onPress={() => navigation.navigate("Settings")} hitSlop={12}>
             <Text style={{ color: C.dim, fontSize: 20 }}>⚙</Text>
@@ -83,7 +85,8 @@ function Root() {
     <NavigationContainer theme={theme}>
       <StatusBar style="dark" />
       <Stack.Navigator screenOptions={{ headerStyle: { backgroundColor: C.card }, headerShadowVisible: false,
-        headerTitleStyle: { color: C.ink, fontWeight: "800" }, headerTintColor: C.blue, contentStyle: { backgroundColor: C.bg } }}>
+        headerTitleStyle: { color: C.ink, fontWeight: "800" }, headerTintColor: C.blue, contentStyle: { backgroundColor: C.bg },
+        headerRight: () => <ViewChip /> }}>
         <Stack.Screen name="Tabs" component={Tabs} options={{ headerShown: false }} />
         <Stack.Screen name="BacktestResult" component={BacktestResultScreen} options={{ title: "Backtest result" }} />
         <Stack.Screen name="Session" component={SessionScreen} options={{ title: "Session" }} />
@@ -106,9 +109,11 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <CrashGuard>
+      <ViewProvider>
       <ModeProvider>
         <Root />
       </ModeProvider>
+      </ViewProvider>
       </CrashGuard>
     </SafeAreaProvider>
   );

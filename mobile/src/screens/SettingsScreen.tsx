@@ -4,6 +4,7 @@ import { api, getSettings, savePcSettings, saveSettings, type Target } from "../
 import { Btn, C, Card, Chips, ErrorText, Field, Screen, s, Hint } from "../ui";
 import ZerodhaCard from "../ZerodhaCard";
 import TradingModeCard from "../TradingModeCard";
+import { useView } from "../view";
 
 /** Market-moving days (RBI, US Fed, Budget + your own) — Auto Trade skips or goes careful on them. */
 function EventsCard() {
@@ -16,7 +17,7 @@ function EventsCard() {
     try { setEv(await api.saveEvents(mine)); setErr(null); } catch (e: any) { setErr(e.message); }
   };
   return (
-    <Card title="📅 Event days">
+    <Card detail title="📅 Event days">
       {ev?.upcoming.map((e) => {
         const own = ev.mine.some((m) => m.day === e.day);
         return (
@@ -33,6 +34,21 @@ function EventsCard() {
       }} />
       <ErrorText msg={err} />
       <Hint>RBI policy, US Fed and Budget days are built in. Tap ✕ on your own days to remove them. Each Auto Trade chooses to skip these days or trade 1 lot.</Hint>
+    </Card>
+  );
+}
+
+/** Simple = only what you need to act on; Detailed = every number, proof, log and explanation. */
+function ViewCard() {
+  const { view, setView } = useView();
+  return (
+    <Card title="👁 View">
+      <Chips options={["simple", "detailed"] as const} value={view} onChange={setView}
+        labels={{ simple: "◧ Simple", detailed: "▦ Detailed" }} />
+      <Text style={{ color: C.dim, fontSize: 13 }}>
+        {view === "simple" ? "Simple: status, money, open trade and next trade only. Logs, proofs and explanations are hidden."
+          : "Detailed: everything — AI proofs, tuning tables, execution logs, costs and how-it-works notes."}
+      </Text>
     </Card>
   );
 }
@@ -85,6 +101,7 @@ export default function SettingsScreen() {
 
   return (
     <Screen>
+      <ViewCard />
       <TradingModeCard />
       <ZerodhaCard />
       <Card title="📱 Phone server — backtest & paper">
@@ -124,7 +141,7 @@ export default function SettingsScreen() {
 
       <EventsCard />
 
-      <Card title="Which server does what">
+      <Card detail title="Which server does what">
         <Hint>
           • Paper (Manual) → phone server.{"\n"}
           • Live mode → PC server (Zerodha accepts orders only from your whitelisted static IP).{"\n"}

@@ -294,11 +294,14 @@ class SwingTrader:
                 pass
 
     def settle(self):
-        """Add the closed position's net P&L to this strategy's money (once)."""
-        p = self.position
-        if p is not None and p.state == "POSITION_CLOSED" and p.id not in self.counted:
-            self.realized = round(self.realized + float(p.net), 2)
-            self.counted = (self.counted + [p.id])[-200:]
+        """Add closed positions' net P&L to this strategy's money (once each) — the current one and any
+        earlier one still closing (a LIVE roll sells the old contract while the new one is already bought)."""
+        prev = getattr(self, "closing", [])
+        for p in [*prev, self.position]:
+            if p is not None and p.state == "POSITION_CLOSED" and p.id not in self.counted:
+                self.realized = round(self.realized + float(p.net), 2)
+                self.counted = (self.counted + [p.id])[-200:]
+        self.closing = [p for p in prev if p.state in ACTIVE_STATES]
 
     @property
     def equity(self) -> float:
@@ -459,6 +462,8 @@ class SwingTrader:
                              f"→ selling it and buying the next monthly (trend still UP)", "signal")
                     pos.request_exit("roll")
                     self.settle()
+                    if pos.state in ACTIVE_STATES:  # LIVE: sell still in flight — keep counting it when it fills
+                        self.closing = [*getattr(self, "closing", []), pos]
                     self._open(now, roll=True)
                 else:
                     self.log(f"Trend still UP ({what}) — holding {pos.spec.tradingsymbol}", "info")
@@ -560,4 +565,5 @@ class SwingTrader:
     def to_store(self) -> dict:
         return {"id": self.id, "config": asdict(self.cfg), "enabled": self.enabled, "last_check": self.last_check,
                 "signal": self.signal, "timeline": self.timeline[-200:], "created": self.created,
-                "position_id": self.position.id if self.position else None, "realized": self.realized, "counted": self.counted, "wait_cross": self.wait_cross}
+                "position_id": self.position.id if self.position else None, "realized": self.realized, "counted": self.counted, "wait_cross": self.wait_cross,
+                "closing_ids": [p.id for p in getattr(self, "closing", [])]}

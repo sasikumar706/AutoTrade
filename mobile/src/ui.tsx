@@ -4,6 +4,7 @@ import {
   ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View, type RefreshControlProps, type ViewStyle,
 } from "react-native";
 import Svg, { Line, Path, Text as SvgText } from "react-native-svg";
+import { useView } from "./view";
 
 export const C = {
   // "trading desk" light theme: cool grey canvas, white cards, deep navy ink, one confident blue,
@@ -34,7 +35,10 @@ export function Screen({ children, refresh }: { children: React.ReactNode; refre
   );
 }
 
-export function Card({ title, children, style, right }: { title?: string; children: React.ReactNode; style?: ViewStyle; right?: React.ReactNode }) {
+/** `detail` cards show only in Detailed view (see view.tsx). */
+export function Card({ title, children, style, right, detail }: { title?: string; children: React.ReactNode; style?: ViewStyle; right?: React.ReactNode; detail?: boolean }) {
+  const { detailed } = useView();
+  if (detail && !detailed) return null;
   return (
     <View style={[s.card, style]}>
       {title ? (
@@ -49,10 +53,12 @@ export function Card({ title, children, style, right }: { title?: string; childr
 }
 
 /** A card that opens and closes: the title and a one-line summary always show, the details only when opened. */
-export function Section({ title, summary, children, open: open0 = false, right }: {
-  title: string; summary?: string; children: React.ReactNode; open?: boolean; right?: React.ReactNode;
+export function Section({ title, summary, children, open: open0 = false, right, detail }: {
+  title: string; summary?: string; children: React.ReactNode; open?: boolean; right?: React.ReactNode; detail?: boolean;
 }) {
   const [open, setOpen] = useState(open0);
+  const { detailed } = useView();
+  if (detail && !detailed) return null;
   return (
     <View style={s.card}>
       <Pressable onPress={() => setOpen(!open)} hitSlop={6} style={{ gap: 2 }}>
@@ -294,6 +300,8 @@ export function InfoLine({ icon, text, color, sub }: { icon: string; text: strin
 /** Help text kept out of the way: a small "ⓘ" line; the explanation shows only when tapped. */
 export function Hint({ children, label = "How it works" }: { children: React.ReactNode; label?: string }) {
   const [open, setOpen] = useState(false);
+  const { detailed } = useView();
+  if (!detailed) return null; // explanations live in Detailed view
   return (
     <Pressable onPress={() => setOpen(!open)} hitSlop={6} style={{ gap: 4 }}>
       <Text style={{ color: C.blue, fontSize: 12, fontWeight: "700" }}>ⓘ {open ? "Hide" : label}</Text>
