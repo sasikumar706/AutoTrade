@@ -330,7 +330,20 @@ export const api = {
   cancelJob: (id: string) => request<JobSnap>("POST", `/jobs/${id}/cancel`),
   optionOrder: (body: Record<string, unknown>) => request<PositionSnap>("POST", "/options/order", body, 30_000),
   positionsList: (mode?: string) => request<PositionSnap[]>("GET", `/positions${mode ? `?mode=${mode}` : ""}`),
-  positionsDay: (mode: string, day: string) => request<PositionSnap[]>("GET", `/positions?mode=${mode}&day=${day}`),
+  positionsDay: (mode: string, day: string) => request<PositionSnap[]>("GET", `/positions?mode=${mode}&day=${day}&light=true`),
+  /** Today only: every open position + whatever started/finished today (light rows). Falls back on older servers. */
+  positionsToday: async (mode: string): Promise<PositionSnap[]> => {
+    try { return await request<PositionSnap[]>("GET", `/positions/today?mode=${mode}`); }
+    catch (e: any) {
+      if (e?.status !== 404 && e?.status !== 405) throw e;
+      const today = todayKey();
+      return (await request<PositionSnap[]>("GET", `/positions?mode=${mode}`)).filter((p) =>
+        !["POSITION_CLOSED", "ORDER_REJECTED", "ORDER_CANCELLED"].includes(p.state) || String(p.exit_time ?? p.entry_time ?? p.created ?? "").startsWith(today));
+    }
+  },
+  /** Closed trades from earlier days only — the History tab. */
+  positionsPast: (mode: string, source?: string) =>
+    request<PositionSnap[]>("GET", `/positions/past?mode=${mode}${source ? `&source=${source}` : ""}`, undefined, 30_000),
   pnlDays: (mode: string) => request<{ day: string; trades: number; wins: number; net: number; by: Record<string, number> }[]>(
     "GET", `/positions/days?mode=${mode}`),
   position: (id: string) => request<PositionSnap>("GET", `/positions/${id}`, undefined, 15_000),
@@ -369,3 +382,6 @@ export const inr = (n: number | null | undefined, digits = 0) =>
     : (n < 0 ? "-₹" : "₹") + Math.abs(n).toLocaleString("en-IN", { maximumFractionDigits: digits, minimumFractionDigits: digits });
 
 export const pct = (n: number | null | undefined) => (n === null || n === undefined ? "—" : `${n > 0 ? "+" : ""}${n.toFixed(2)}%`);
+
+/** Phone's local (IST) calendar day, YYYY-MM-DD. */
+export const todayKey = () => new Date().toLocaleDateString("en-CA");

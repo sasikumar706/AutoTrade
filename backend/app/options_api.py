@@ -288,14 +288,46 @@ def register(app, auth, kite, store, hub, errors, dt):
                                              req.strike_offset, req.lots, req.side, req.product, req.risk.model_dump(),
                                              req.confirm_live, req.allow_option_selling).snapshot())
 
+    def _light(p):
+        """List-row snapshot: no event log / price path (those are only needed on the position screen)."""
+        d = p.snapshot()
+        d.pop("events", None)
+        d.pop("path", None)
+        return d
+
+    def _pday(p) -> str:
+        return str(p.exit_time or p.entry_time or p.created or "")[:10]
+
     @app.get("/positions", dependencies=auth)
-    def positions_list(mode: str | None = None, active_only: bool = False, day: str | None = None):
+    def positions_list(mode: str | None = None, active_only: bool = False, day: str | None = None, light: bool = False):
         from .positions import ACTIVE_STATES
         ps = [p for p in om.positions.values() if (mode is None or p.mode == mode)
               and (not active_only or p.state in ACTIVE_STATES)
-              and (day is None or str(p.exit_time or p.entry_time or "")[:10] == day)]
+              and (day is None or _pday(p) == day)]
         ps.sort(key=lambda p: p.created, reverse=True)
-        return [p.snapshot() for p in ps[:100]]
+        return [(_light(p) if light else p.snapshot()) for p in ps[:100]]
+
+    @app.get("/positions/today", dependencies=auth)
+    def positions_today(mode: str | None = None):
+        """What the app's 'today' screens need: every still-open position (even one opened on an earlier day, e.g.
+        Swing) plus everything that started or finished today. Light rows, newest first."""
+        from .positions import ACTIVE_STATES
+        today = datetime.now().date().isoformat()
+        ps = [p for p in om.positions.values() if (mode is None or p.mode == mode)
+              and (p.state in ACTIVE_STATES or _pday(p) == today or str(p.created or "")[:10] == today)]
+        ps.sort(key=lambda p: p.created, reverse=True)
+        return [_light(p) for p in ps]
+
+    @app.get("/positions/past", dependencies=auth)
+    def positions_past(mode: str | None = None, source: str | None = None, limit: int = 300):
+        """Closed trades from EARLIER days only (today's live on the Home/Trade screens), newest first.
+        source: auto | swing | manual."""
+        today = datetime.now().date().isoformat()
+        ps = [p for p in om.positions.values() if p.state == "POSITION_CLOSED" and (mode is None or p.mode == mode)
+              and _pday(p) < today
+              and (source is None or str(p.spec.source or "manual").split(":")[0] == source)]
+        ps.sort(key=lambda p: str(p.exit_time or p.entry_time or ""), reverse=True)
+        return [_light(p) for p in ps[:max(1, min(limit, 1000))]]
 
     @app.get("/positions/days", dependencies=auth)
     def positions_days(mode: str | None = None):

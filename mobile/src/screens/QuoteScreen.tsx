@@ -105,7 +105,7 @@ export default function QuoteScreen({ route, navigation }: any) {
         </Card>
       )}
 
-      <Btn label="✦ Analyse with AI Finder" onPress={() => navigation.navigate("Tabs", { screen: "Finder", params: { inst, nonce: Date.now() } })} />
+      <Btn label="✦ Analyse with AI Finder" onPress={() => navigation.navigate("Finder", { inst, nonce: Date.now() })} />
     </Screen>
   );
 }

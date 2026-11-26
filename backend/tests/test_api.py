@@ -185,6 +185,11 @@ def test_options_chain_quote_and_manual_paper_order(opt_env):
     days = client.get("/positions/days?mode=paper", headers=H).json()
     assert days and days[0]["trades"] >= 1 and "manual" in days[0]["by"]
     assert any(p["id"] == pid for p in client.get(f"/positions?mode=paper&day={days[0]['day']}", headers=H).json())
+    today = client.get("/positions/today?mode=paper", headers=H).json()
+    assert any(p["id"] == pid for p in today) and all("events" not in p and "path" not in p for p in today)
+    assert all(p["id"] != pid for p in client.get("/positions/past?mode=paper", headers=H).json())  # today is not "past"
+    light = client.get("/positions?mode=paper&light=true", headers=H).json()
+    assert light and "events" not in light[0]
     assert client.delete("/positions/history?mode=paper&source=manual", headers=H).json()["deleted"] >= 1
     assert all(p["id"] != pid for p in client.get("/positions?mode=paper", headers=H).json())
 

@@ -1,4 +1,5 @@
 import { useFocusEffect } from "@react-navigation/native";
+import { usePollOnFocus } from "../usePoll";
 import React, { useCallback, useEffect, useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
 import { api, DEFAULT_RISK, inr, type PositionSnap, type RiskSettings } from "../api";
@@ -15,29 +16,29 @@ export function PositionRow({ p, onPress, onClose }: { p: PositionSnap; onPress:
   const open = p.state === "POSITION_OPEN" || p.state === "PARTIALLY_FILLED" || p.state === "EXIT_FAILED";
   const long = p.spec.side > 0;
   const pnl = open ? p.unrealized : p.net;
+  const qty = p.filled_qty || p.spec.qty;
+  const chg = open && p.ltp != null && p.entry_price ? (p.ltp - p.entry_price) * p.spec.side : null;
+  const chgPct = chg != null && p.entry_price ? (chg / p.entry_price) * 100 : null;
+  const quiet = p.state === "POSITION_OPEN" || p.state === "POSITION_CLOSED";
   return (
-    <Pressable onPress={onPress} style={{ paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: C.border, gap: 4 }}>
+    <Pressable onPress={onPress} style={({ pressed }) => ({ paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: C.border, gap: 3, opacity: pressed ? 0.6 : 1 })}>
       <View style={s.row}>
-        <Badge text={long ? "LONG" : "SHORT"} color={long ? C.blue : C.amber} />
-        <Text style={[s.text, { flex: 1, fontWeight: "700" }]} numberOfLines={2}>{contractText({ tradingsymbol: p.spec.tradingsymbol, strike: p.spec.strike, expiry: p.spec.expiry, option_type: p.spec.instrument_type })}</Text>
-        <Badge text={p.state.replace(/_/g, " ")} color={stateColor(p.state)} />
+        <Text style={{ color: long ? C.blue : C.amber, fontSize: 11, fontWeight: "900", width: 40 }}>{long ? "BUY" : "SELL"}</Text>
+        <Text style={[s.text, { flex: 1, fontWeight: "800" }]} numberOfLines={1}>{p.spec.tradingsymbol}</Text>
+        <Text style={{ color: pnlColor(pnl), fontWeight: "900", fontSize: 15, fontVariant: ["tabular-nums"] }}>{inr(pnl, 2)}</Text>
       </View>
-      <Text style={[s.muted, { fontWeight: "700" }]}>
-        📅 {when(p.entry_time ?? p.created)}{p.exit_time ? ` → ${when(p.exit_time).split(" ").slice(-1)[0]}` : ""}
-      </Text>
-      <Text style={s.muted}>
-        {p.filled_qty || p.spec.qty} qty · entry {p.entry_price ?? "—"} · SL {p.stop ?? "—"} · T {p.target ?? "—"} ·{" "}
-        <Text style={{ color: pnlColor(pnl) }}>{inr(pnl, 2)}</Text>
-      </Text>
-      {["POSITION_OPEN", "PARTIALLY_FILLED", "EXIT_FAILED"].includes(p.state) && p.ltp != null && p.entry_price ? (
-        <Text style={{ color: pnlColor((p.ltp - p.entry_price) * p.spec.side), fontWeight: "800", fontSize: 15 }}>
-          Now ₹{p.ltp.toFixed(2)}  {(p.ltp - p.entry_price) * p.spec.side >= 0 ? "▲ +" : "▼ "}{((p.ltp - p.entry_price) * p.spec.side).toFixed(2)} from entry
+      <View style={s.row}>
+        <Text style={[s.muted, { flex: 1, fontSize: 12 }]} numberOfLines={1}>
+          {qty} qty · avg {p.entry_price ?? "—"}{open && p.ltp != null ? ` · LTP ${p.ltp.toFixed(2)}` : p.exit_price != null ? ` · out ${p.exit_price}` : ""}
         </Text>
-      ) : null}
-      {p.message && p.state !== "POSITION_CLOSED" ? <Text style={{ color: stateColor(p.state), fontSize: 12 }}>{p.message}</Text> : null}
-      {open && onClose && (
-        <Btn label={long ? "SELL to close" : "BUY to close"} kind="danger" onPress={onClose} />
-      )}
+        {chgPct != null ? <Text style={{ color: pnlColor(chg), fontSize: 12, fontWeight: "700" }}>{chgPct >= 0 ? "+" : ""}{chgPct.toFixed(1)}%</Text>
+          : !quiet ? <Badge text={p.state.replace(/_/g, " ")} color={stateColor(p.state)} /> : null}
+      </View>
+      <Text style={[s.muted, { fontSize: 12 }]}>
+        {when(p.entry_time ?? p.created).split(" ").slice(-1)[0]}{p.exit_time ? ` → ${when(p.exit_time).split(" ").slice(-1)[0]}` : ""} · SL {p.stop ?? "—"} · T {p.target ?? "—"}
+      </Text>
+      {p.message && !quiet ? <Text style={{ color: stateColor(p.state), fontSize: 12 }} numberOfLines={2}>{p.message}</Text> : null}
+      {open && onClose && <Btn label={long ? "Exit (SELL)" : "Exit (BUY)"} kind="danger" onPress={onClose} />}
     </Pressable>
   );
 }
@@ -68,16 +69,12 @@ export default function TradeTicket({ mode, navigation, liveEnabled = false, pre
 
   const load = useCallback(async () => {
     try {
-      setPositions(await api.positionsList(mode));
+      setPositions(await api.positionsToday(mode)); // today only (open + today's), light rows
     } catch (e: any) {
       setErr(e.message);
     }
   }, [mode]);
-  useFocusEffect(useCallback(() => {
-    load();
-    const t = setInterval(load, 3000);
-    return () => clearInterval(t);
-  }, [load]));
+  usePollOnFocus(load, 3000); // one request at a time, paused in background
 
   const blocked = mode === "live" && !liveEnabled;
   // duplicate orders in the same contract are rejected by the server (prevents accidental reversal)
@@ -161,9 +158,9 @@ export default function TradeTicket({ mode, navigation, liveEnabled = false, pre
         kind={mode === "live" ? "warn" : "primary"} onPress={onPlace} loading={busy} disabled={blocked} />
 
       <TodayTrades positions={positions} navigation={navigation} />
-      <Pressable onPress={() => navigation.navigate("PnlHistory", { mode })}
+      <Pressable onPress={() => navigation.navigate("History")}
         style={{ paddingVertical: 12, alignItems: "center", borderRadius: 12, borderWidth: 1, borderColor: C.border, backgroundColor: C.card }}>
-        <Text style={{ color: C.blue, fontWeight: "800" }}>📅 P&L history (earlier days) ›</Text>
+        <Text style={{ color: C.blue, fontWeight: "800" }}>🕘 Earlier days — in History ›</Text>
       </Pressable>
     </>
   );

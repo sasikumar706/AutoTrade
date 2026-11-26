@@ -4,7 +4,6 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Alert, RefreshControl, Text, View, Pressable } from "react-native";
 import { api, inr } from "../api";
 import { useMode, type TicketPrefill } from "../mode";
-import ReportCard from "../ReportCard";
 import { Badge, C, Card, Chips, ErrorText, Screen, pnlColor, s } from "../ui";
 import { SessionsPanel } from "./LiveScreen";
 import TradeTicket from "./TradeTicket";
@@ -22,13 +21,6 @@ export function TradeScreen({ navigation, route }: any) {
 export function PaperScreen({ navigation, prefill }: { navigation: any; prefill?: TicketPrefill }) {
   const [seg, setSeg] = useState<"options" | "sessions">("options");
   const [reload, setReload] = useState(0);
-  async function clearRun(source?: string) {
-    try {
-      const n = (await api.clearPositions("paper", source)).deleted;
-      Alert.alert("Cleared", `${n} closed paper trade(s) removed.`);
-      setReload((x) => x + 1);
-    } catch (e: any) { Alert.alert("Clear failed", e.message); }
-  }
   useEffect(() => { if (prefill) setSeg("options"); }, [prefill?.nonce]);
   return (
     <Screen>
@@ -37,16 +29,9 @@ export function PaperScreen({ navigation, prefill }: { navigation: any; prefill?
       <Text style={s.muted}>Paper trading uses live Zerodha prices but simulated orders. No money at risk.</Text>
       {seg === "options" ? <TradeTicket key={`t${reload}`} mode="paper" navigation={navigation} prefill={prefill} />
         : <SessionsPanel key={`s${reload}`} navigation={navigation} modes={["paper", "replay"] as const} />}
-      <Btn label={seg === "options" ? "Clear paper trade history" : "Clear paper session history"} kind="ghost" onPress={() =>
-        seg === "options"
-          ? Alert.alert("Clear paper trade history?", "Removes CLOSED paper trades and their stats. Open positions are always kept.", [
-              { text: "Cancel", style: "cancel" },
-              { text: "Only trades I placed", onPress: () => clearRun("manual") },
-              { text: "All paper trades (incl. Auto & Swing)", style: "destructive", onPress: () => clearRun(undefined) },
-            ])
-          : confirmClear("Clear paper session history?", "Removes finished paper and replay strategy sessions. Running sessions are kept.",
-              async () => (await api.clearSessions("paper")).deleted, () => setReload((n) => n + 1))} />
-      {seg === "options" && <ReportCard source="manual" mode="paper" />}
+      {seg === "sessions" && <Btn label="Clear paper session history" kind="ghost" onPress={() =>
+        confirmClear("Clear paper session history?", "Removes finished paper and replay strategy sessions. Running sessions are kept.",
+          async () => (await api.clearSessions("paper")).deleted, () => setReload((n) => n + 1))} />}
       {seg === "options" && (
         <Pressable onPress={() => navigation.navigate("Swing")}>
           <Card title="📈 Swing trend (holds for weeks)" right={<Text style={{ color: C.blue, fontWeight: "800" }}>Open ›</Text>}>
@@ -109,7 +94,6 @@ export function LiveTradeScreen({ navigation, prefill }: { navigation: any; pref
         {liveEnabled ? "LIVE: orders here use real money." : "Live trading is disabled on the server."}
       </Text>
       {seg === "options" && <TradeTicket mode="live" navigation={navigation} liveEnabled={liveEnabled} prefill={prefill} />}
-      {seg === "options" && <ReportCard source="all" mode="live" />}
       {seg === "options" && (
         <Pressable onPress={() => navigation.navigate("Swing")}>
           <Card title="📈 Swing trend (holds for weeks)" right={<Text style={{ color: C.blue, fontWeight: "800" }}>Open ›</Text>}>

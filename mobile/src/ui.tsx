@@ -4,7 +4,6 @@ import {
   ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View, type RefreshControlProps, type ViewStyle,
 } from "react-native";
 import Svg, { Line, Path, Text as SvgText } from "react-native-svg";
-import { useView } from "./view";
 
 export const C = {
   // "trading desk" light theme: cool grey canvas, white cards, deep navy ink, one confident blue,
@@ -35,10 +34,7 @@ export function Screen({ children, refresh }: { children: React.ReactNode; refre
   );
 }
 
-/** `detail` cards show only in Detailed view (see view.tsx). */
-export function Card({ title, children, style, right, detail }: { title?: string; children: React.ReactNode; style?: ViewStyle; right?: React.ReactNode; detail?: boolean }) {
-  const { detailed } = useView();
-  if (detail && !detailed) return null;
+export function Card({ title, children, style, right }: { title?: string; children: React.ReactNode; style?: ViewStyle; right?: React.ReactNode }) {
   return (
     <View style={[s.card, style]}>
       {title ? (
@@ -53,12 +49,10 @@ export function Card({ title, children, style, right, detail }: { title?: string
 }
 
 /** A card that opens and closes: the title and a one-line summary always show, the details only when opened. */
-export function Section({ title, summary, children, open: open0 = false, right, detail }: {
-  title: string; summary?: string; children: React.ReactNode; open?: boolean; right?: React.ReactNode; detail?: boolean;
+export function Section({ title, summary, children, open: open0 = false, right }: {
+  title: string; summary?: string; children: React.ReactNode; open?: boolean; right?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(open0);
-  const { detailed } = useView();
-  if (detail && !detailed) return null;
   return (
     <View style={s.card}>
       <Pressable onPress={() => setOpen(!open)} hitSlop={6} style={{ gap: 2 }}>
@@ -171,8 +165,16 @@ export function Badge({ text, color }: { text: string; color: string }) {
 /** Simple SVG line chart: equity (or any series) with min/max labels. */
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 /** "2026-11-05T10:35:12" → "5 Nov 10:35" (adds seconds when asked). */
-export function when(iso?: string | null, seconds = false): string {
-  if (!iso || iso.length < 16) return iso ?? "—";
+function isoLocal(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+export function when(t?: string | number | null, seconds = false): string {
+  if (t == null || t === "") return "—";
+  // saved analyses/backtests carry epoch seconds; positions carry ISO text — local (IST) wall time either way
+  const iso = typeof t === "number" ? isoLocal(new Date(t < 1e12 ? t * 1000 : t)) : String(t);
+  if (iso.length < 16) return iso;
   const m = Number(iso.slice(5, 7));
   return `${Number(iso.slice(8, 10))} ${MONTHS[m - 1] ?? iso.slice(5, 7)} ${iso.slice(11, seconds ? 19 : 16)}`;
 }
@@ -300,12 +302,123 @@ export function InfoLine({ icon, text, color, sub }: { icon: string; text: strin
 /** Help text kept out of the way: a small "ⓘ" line; the explanation shows only when tapped. */
 export function Hint({ children, label = "How it works" }: { children: React.ReactNode; label?: string }) {
   const [open, setOpen] = useState(false);
-  const { detailed } = useView();
-  if (!detailed) return null; // explanations live in Detailed view
   return (
     <Pressable onPress={() => setOpen(!open)} hitSlop={6} style={{ gap: 4 }}>
       <Text style={{ color: C.blue, fontSize: 12, fontWeight: "700" }}>ⓘ {open ? "Hide" : label}</Text>
       {open ? <Text style={{ color: C.dim, fontSize: 13, lineHeight: 18 }}>{children}</Text> : null}
     </Pressable>
+  );
+}
+
+/* ---------- broker-app style building blocks (Kite / Dhan style: one big P&L, clean rows, quiet labels) ---------- */
+
+export const rupee = (n?: number | null, sign = false, dp = 0) =>
+  n == null || isNaN(n) ? "—"
+    : `${n < 0 ? "−" : sign && n > 0 ? "+" : ""}₹${Math.abs(n).toLocaleString("en-IN", { minimumFractionDigits: dp, maximumFractionDigits: dp })}`;
+
+/** Small caps section label with an optional right-side element. */
+export function Label({ text, right }: { text: string; right?: React.ReactNode }) {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", marginTop: 4 }}>
+      <Text style={{ color: C.dim, fontSize: 12, fontWeight: "800", letterSpacing: 0.7, flex: 1 }}>{text.toUpperCase()}</Text>
+      {right}
+    </View>
+  );
+}
+
+/** The headline money card: big net P&L, a caption, and up to 3 small figures underneath. */
+export function PnlHero({ title, value, caption, items = [], right }: {
+  title: string; value: number | null | undefined; caption?: string | null;
+  items?: { label: string; value: string; color?: string }[]; right?: React.ReactNode;
+}) {
+  return (
+    <View style={[s.card, { padding: 16 }]}>
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <Text style={{ color: C.dim, fontSize: 12, fontWeight: "800", letterSpacing: 0.7, flex: 1 }}>{title.toUpperCase()}</Text>
+        {right}
+      </View>
+      <Text style={{ color: pnlColor(value ?? 0), fontSize: 32, fontWeight: "900", marginTop: 4, fontVariant: ["tabular-nums"] }}
+        numberOfLines={1} adjustsFontSizeToFit>{rupee(value ?? 0, true)}</Text>
+      {caption ? <Text style={{ color: C.dim, fontSize: 13, marginTop: 2 }}>{caption}</Text> : null}
+      {items.length > 0 && (
+        <View style={{ flexDirection: "row", marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: C.border }}>
+          {items.map((it, i) => (
+            <View key={it.label} style={{ flex: 1, borderLeftWidth: i ? 1 : 0, borderLeftColor: C.border, paddingLeft: i ? 10 : 0 }}>
+              <Text style={{ color: C.dim, fontSize: 11, fontWeight: "700" }}>{it.label}</Text>
+              <Text style={{ color: it.color ?? C.text, fontSize: 15, fontWeight: "800", marginTop: 2, fontVariant: ["tabular-nums"] }}
+                numberOfLines={1} adjustsFontSizeToFit>{it.value}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
+/** One list line: bold title + muted subtitle on the left, value (+ sub) right-aligned. */
+export function ListRow({ title, sub, value, valueColor, valueSub, left, onPress, first }: {
+  title: string; sub?: string | null; value?: string; valueColor?: string; valueSub?: string | null;
+  left?: React.ReactNode; onPress?: () => void; first?: boolean;
+}) {
+  return (
+    <Pressable onPress={onPress} disabled={!onPress}
+      style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11,
+        borderTopWidth: first ? 0 : 1, borderTopColor: C.border, opacity: pressed ? 0.6 : 1 })}>
+      {left}
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: C.text, fontWeight: "700", fontSize: 14 }} numberOfLines={1}>{title}</Text>
+        {sub ? <Text style={{ color: C.dim, fontSize: 12, marginTop: 1 }} numberOfLines={1}>{sub}</Text> : null}
+      </View>
+      {value !== undefined && (
+        <View style={{ alignItems: "flex-end" }}>
+          <Text style={{ color: valueColor ?? C.text, fontWeight: "800", fontSize: 14, fontVariant: ["tabular-nums"] }}>{value}</Text>
+          {valueSub ? <Text style={{ color: C.dim, fontSize: 11 }}>{valueSub}</Text> : null}
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+/** Calm empty state instead of a blank card. */
+export function Empty({ icon = "○", text, sub }: { icon?: string; text: string; sub?: string }) {
+  return (
+    <View style={{ alignItems: "center", paddingVertical: 18, gap: 4 }}>
+      <Text style={{ fontSize: 22, color: C.dim }}>{icon}</Text>
+      <Text style={{ color: C.text, fontWeight: "700" }}>{text}</Text>
+      {sub ? <Text style={{ color: C.dim, fontSize: 12, textAlign: "center" }}>{sub}</Text> : null}
+    </View>
+  );
+}
+
+/** Row of square shortcut tiles (icon over label). */
+export function QuickActions({ items }: { items: { icon: string; label: string; onPress: () => void }[] }) {
+  return (
+    <View style={{ flexDirection: "row", gap: 8 }}>
+      {items.map((it) => (
+        <Pressable key={it.label} onPress={it.onPress}
+          style={({ pressed }) => ({ flex: 1, alignItems: "center", paddingVertical: 12, borderRadius: 14, backgroundColor: C.card,
+            borderWidth: 1, borderColor: C.border, opacity: pressed ? 0.6 : 1 })}>
+          <Text style={{ fontSize: 18 }}>{it.icon}</Text>
+          <Text style={{ color: C.text, fontSize: 12, fontWeight: "700", marginTop: 4 }} numberOfLines={1}>{it.label}</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+/** Thin bar chart of daily P&L (green up / red down from a centre line), oldest → newest. */
+export function DayBars({ values, height = 70 }: { values: number[]; height?: number }) {
+  const max = Math.max(1, ...values.map((v) => Math.abs(v)));
+  const half = height / 2;
+  return (
+    <View style={{ height, flexDirection: "row", alignItems: "center", gap: 3 }}>
+      {values.map((v, i) => (
+        <View key={i} style={{ flex: 1, height, justifyContent: "center" }}>
+          <View style={{ position: "absolute", left: 0, right: 0, top: half - 0.5, height: 1, backgroundColor: C.border }} />
+          <View style={{ position: "absolute", left: 0, right: 0, borderRadius: 2, backgroundColor: v >= 0 ? C.green : C.red,
+            height: Math.max(2, (Math.abs(v) / max) * (half - 2)), ...(v >= 0 ? { bottom: half } : { top: half }) }} />
+        </View>
+      ))}
+    </View>
   );
 }

@@ -2,7 +2,6 @@ import { usePollOnFocus } from "../usePoll";
 import React, { useCallback, useState } from "react";
 import { Alert, Text, View } from "react-native";
 import { api, inr, type PositionSnap, type WhyItem } from "../api";
-import { useView } from "../view";
 import { WhyList } from "../WhyList";
 import { Badge, Btn, C, Card, ErrorText, LineChart, Row, Screen, Stat, pnlColor, s, when, contractText, Hint } from "../ui";
 import { stateColor } from "./TradeTicket";
@@ -12,7 +11,6 @@ export default function PositionScreen({ route }: any) {
   const [p, setP] = useState<PositionSnap | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [why, setWhy] = useState<WhyItem[] | null>(null);
-  const { detailed } = useView();
   const load = useCallback(async () => {
     try {
       const x = await api.position(id);
@@ -56,9 +54,9 @@ export default function PositionScreen({ route }: any) {
       </Card>
       <ErrorText msg={err} />
       {(open || (p.booked?.length ?? 0) > 0) && (p.stats?.risk_live || (p.booked?.length ?? 0) > 0) ? <RiskMonitor p={p} open={open} /> : null}
-      {why && why.length > 0 && <Card detail title="Why Auto Trade placed this order"><WhyList why={why} /></Card>}
+      {why && why.length > 0 && <Card title="Why Auto Trade placed this order"><WhyList why={why} /></Card>}
       {(p.path?.length ?? 0) > 1 && (
-        <Card detail title="Premium since entry">
+        <Card title="Premium since entry">
           <LineChart values={p.path!.map((x) => x[1])} color={pnlColor(pnl) === C.text ? C.blue : pnlColor(pnl)} height={170}
             lines={[
               ...(p.entry_price ? [{ value: p.entry_price, color: C.dim, label: "Entry" }] : []),
@@ -73,18 +71,18 @@ export default function PositionScreen({ route }: any) {
           <Stat label="LTP" value={p.ltp?.toFixed(2) ?? "—"} />
           <Stat label="Entry" value={p.entry_price?.toFixed(2) ?? "—"} />
           <Stat label="Stop" value={p.stop?.toFixed(2) ?? "—"} color={C.red} />
-          {detailed && <Stat label="Initial stop" value={p.stop0?.toFixed(2) ?? "—"} />}
+          <Stat label="Initial stop" value={p.stop0?.toFixed(2) ?? "—"} />
           <Stat label="Target" value={p.target?.toFixed(2) ?? "—"} color={C.green} />
           <Stat label="Exit" value={p.exit_price?.toFixed(2) ?? "—"} />
           <Stat label="Filled qty" value={String(p.filled_qty)} />
-          {detailed && <Stat label="Entry slippage" value={p.stats.entry_slippage_pct !== null && p.stats.entry_slippage_pct !== undefined ? `${p.stats.entry_slippage_pct}%` : "—"} />}
+          <Stat label="Entry slippage" value={p.stats.entry_slippage_pct !== null && p.stats.entry_slippage_pct !== undefined ? `${p.stats.entry_slippage_pct}%` : "—"} />
         </Row>
-        {p.mode === "live" && detailed && (
+        {p.mode === "live" && (
           <Text style={s.muted}>Orders: entry {p.entry_order_id ?? "—"} · protective SL {p.sl_order_id ?? "—"} · exit {p.exit_order_id ?? "—"}</Text>
         )}
         {open && <Btn label={long ? "SELL to close" : "BUY to close"} kind="danger" onPress={close} />}
       </Card>
-      <Card detail title="Execution log">
+      <Card title="Execution log">
         {[...p.events].reverse().map((e, i) => (
           <Text key={i} style={[s.muted, { color: e.kind === "alert" ? C.red : C.dim }]}>{when(e.t, true)}  {e.msg}</Text>
         ))}
@@ -138,7 +136,7 @@ function RiskMonitor({ p, open }: { p: PositionSnap; open: boolean }) {
   const dangerColor = !r ? C.dim : r.danger >= 60 ? C.red : r.danger >= 30 ? C.amber : C.green;
   const feel = !r ? "" : r.danger >= 60 ? "High risk — ready to exit early" : r.danger >= 30 ? "Watching closely" : "Healthy";
   return (
-    <Card detail title="🧠 AI risk monitor" right={r && open ? <Badge text={`${r.danger}/100`} color={dangerColor} /> : undefined}>
+    <Card title="🧠 AI risk monitor" right={r && open ? <Badge text={`${r.danger}/100`} color={dangerColor} /> : undefined}>
       {r && open && (
         <>
           <Text style={{ color: dangerColor, fontWeight: "800" }}>{feel}</Text>

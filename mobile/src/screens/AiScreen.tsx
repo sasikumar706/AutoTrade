@@ -67,6 +67,8 @@ export default function AiScreen({ navigation, route }: any) {
 
   const loadHistory = useCallback(() => { api.analyses().then(setHistory).catch(() => {}); }, []);
   useFocusEffect(useCallback(() => { loadHistory(); }, [loadHistory]));
+  // opened from History → Saved: show that analysis
+  useEffect(() => { if (route?.params?.openId) openPast(route.params.openId); }, [route?.params?.openId]);
 
   async function openPast(id: string) {
     setOpening(id);
@@ -108,10 +110,10 @@ export default function AiScreen({ navigation, route }: any) {
     if (!index) return;
     const go = () => {
       setMode(target);
-      navigation.navigate("Trade", { prefill: {
+      navigation.navigate("Tabs", { screen: "Trade", params: { prefill: {
         index, optionType, nonce: Date.now(),
         note: `AI Finder${r ? `: ${r.name} says ${r.now.action}` : ""} → BUY ${index} ${optionType} (ATM)`,
-      } });
+      } } });
     };
     if (target === "paper") return go();
     Alert.alert("Switch to LIVE mode?", `Opens the live order ticket with BUY ${index} ${optionType} (ATM) filled in. Nothing is sent until you review and confirm the order.`, [
@@ -320,7 +322,7 @@ export default function AiScreen({ navigation, route }: any) {
             {!res.ai_available ? <Text style={s.muted}>Tip: add ANTHROPIC_API_KEY to backend/.env for a deeper Claude-written analysis.</Text> : null}
           </Card>
 
-          <Card detail title="Market view" right={<Badge text={snap.verdict} color={verdictColor(snap.verdict)} />}>
+          <Card title="Market view" right={<Badge text={snap.verdict} color={verdictColor(snap.verdict)} />}>
             <ScoreBar score={snap.score} />
             <Row gap={8}>
               <Stat label="Score" value={`${snap.score > 0 ? "+" : ""}${snap.score}`} color={verdictColor(snap.verdict)} />
@@ -394,26 +396,12 @@ export default function AiScreen({ navigation, route }: any) {
         </>
       )}
 
-      <Card detail title={`Past analyses (${history.length})`} right={history.length ? (
-        <Pressable onPress={clearAll} hitSlop={10}><Text style={{ color: C.red, fontWeight: "700" }}>Clear all</Text></Pressable>
-      ) : null}>
-        {history.length === 0 ? <Text style={s.muted}>None saved. Analyses are kept here (latest 50) while "Save to past analyses" is on.</Text> : history.map((it) => (
-          <View key={it.id} style={[s.row, { paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: C.border, gap: 8 }]}>
-            <Pressable style={{ flex: 1 }} onPress={() => openPast(it.id)}>
-              <View style={s.row}>
-                <Text style={[s.text, { flex: 1, fontWeight: res?.id === it.id ? "800" : "600" }]} numberOfLines={1}>
-                  {opening === it.id ? "Opening… " : ""}{it.title} · {ivLabel[it.interval] ?? it.interval}
-                </Text>
-                <Badge text={it.verdict} color={verdictColor(it.verdict)} />
-              </View>
-              <Text style={s.muted} numberOfLines={1}>
-                {when(it.created)}{it.top ? ` · #1 ${it.top}: ${it.top_action}` : ""}
-              </Text>
-            </Pressable>
-            <Pressable onPress={() => deletePast(it)} hitSlop={10}><Text style={{ color: C.dim, fontSize: 16 }}>✕</Text></Pressable>
-          </View>
-        ))}
-      </Card>
+      {history.length > 0 && (
+        <Pressable onPress={() => navigation.navigate("Tabs", { screen: "History", params: { seg: "saved" } })}
+          style={{ paddingVertical: 12, alignItems: "center", borderRadius: 12, borderWidth: 1, borderColor: C.border, backgroundColor: C.card }}>
+          <Text style={{ color: C.blue, fontWeight: "800" }}>🕘 {history.length} past analyses — in History ›</Text>
+        </Pressable>
+      )}
     </Screen>
   );
 }

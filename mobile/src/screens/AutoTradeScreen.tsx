@@ -1,5 +1,4 @@
 import { usePollOnFocus } from "../usePoll";
-import ReportCard from "../ReportCard";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Pressable, RefreshControl, Text, View } from "react-native";
 import { api, DEFAULT_RISK, inr, type AutoSnap, type RiskSettings, type StrategyInfo, type WhyItem } from "../api";
@@ -10,7 +9,6 @@ import { defaultSelection, OptionPicker, RiskForm, strikeMethodParam, type Optio
 import { INTRADAY, useStrategies } from "../StrategyForm";
 import { Badge, Btn, C, Card, Chips, ErrorText, Field, IconBtn, Row, Screen, Section, Stat, Toggle, pnlColor, s, when, contractText, ActionBtn, TabBar, Hint } from "../ui";
 import { PositionRow } from "./TradeTicket";
-import { Detail, useView } from "../view";
 
 /** "fast 9 · slow 21", or for a combo: "SMA crossover (fast 9 · slow 21) + Supertrend (period 10 · multiplier 3)". */
 export const paramText = (p: Record<string, any> | undefined) => {
@@ -157,7 +155,7 @@ function SafetyCard({ f, set }: { f: FormState; set: (p: Partial<FormState>) => 
       </Section>
     )}
 
-    <Section detail title="🛡 Safety filters"
+    <Section title="🛡 Safety filters"
       summary={`VIX ≤ ${f.max_vix || "off"} · ADX ≥ ${f.min_adx || "off"}${f.autopilot ? ` · gap ≤ ${f.max_open_gap_pct || "off"}%` : ""} · lunch ${f.skip_lunch ? "skipped" : "traded"} · expiry ${f.expiryMode} · events ${f.eventMode} · time-stop ${f.time_stop || "off"}`}>
       <Row>
         <Field label="Max India VIX" numeric value={f.max_vix} onChangeText={(t) => set({ max_vix: t })} hint="no new trades above · 0 = off" />
@@ -211,7 +209,7 @@ function SafetyCard({ f, set }: { f: FormState; set: (p: Partial<FormState>) => 
       <Hint>The day's loss limit counts every open trade's stop-loss, so trades together never risk more than the day allows.</Hint>
     </Section>
 
-    <Section detail title="🎯 Option-buyer checks"
+    <Section title="🎯 Option-buyer checks"
       summary={`stretched: ${f.stretchMode} · IV ${f.ivMode} · target ≥ ${f.costRatio === "0" ? "any" : `${f.costRatio}× costs`} · OI walls ${f.oiWalls ? "on" : "off"} · same-way 2nd trade ${f.sameDir === "small" ? "1 lot" : f.sameDir}`}>
       <Text style={s.label}>Move already stretched (far from VWAP, RSI extreme) — don't chase</Text>
       <Chips options={["pullback", "skip", "off"] as const} value={f.stretchMode} onChange={(stretchMode) => set({ stretchMode })}
@@ -232,7 +230,7 @@ function SafetyCard({ f, set }: { f: FormState; set: (p: Partial<FormState>) => 
       <Hint>Pros check these before every option buy: expensive premium loses even when the direction is right, small targets get eaten by costs, and option sellers defend big OI strikes.</Hint>
     </Section>
 
-    <Section detail title="🧠 Smart features"
+    <Section title="🧠 Smart features"
       summary={`Day Builder ${onOff(f.dayBuilder)} · Trend Day ${onOff(f.trendDay)} · 11:45 re-pick ${f.repick ? "on" : "off"} · practice ${f.practice ? "on" : "off"}`}>
       <Text style={s.label}>🧠 Day Builder — builds a strategy for today at 10:15 / 11:45 / 13:15</Text>
       <Chips options={["paper", "always", "off"] as const} value={f.dayBuilder} onChange={(dayBuilder) => set({ dayBuilder })}
@@ -245,7 +243,7 @@ function SafetyCard({ f, set }: { f: FormState; set: (p: Partial<FormState>) => 
       <Toggle label="Paper: switch back on by itself after a server restart" value={f.resume} onChange={(resume) => set({ resume })} />
     </Section>
 
-    <Section detail title="🔬 Proof rules (advanced)" summary={`strict proof ${f.strict ? "on" : "off"} · live needs luck check ${f.luckLive ? "on" : "off"}`}>
+    <Section title="🔬 Proof rules (advanced)" summary={`strict proof ${f.strict ? "on" : "off"} · live needs luck check ${f.luckLive ? "on" : "off"}`}>
       <Toggle label="Strict proof (15+ unseen trades, profit factor 1.2+, survives double costs)" value={f.strict} onChange={(strict) => set({ strict })} />
       <Toggle label="LIVE trades only picks that pass the luck check" value={f.luckLive} onChange={(luckLive) => set({ luckLive })} />
       <Hint>
@@ -268,7 +266,7 @@ function DayBuildCard({ b, building, mode, live, onBuild, busy }: {
   const best = cur?.best ?? (live ? null : cur?.practice);
   const off = mode === "off" || (mode === "paper" && live);
   return (
-    <Card detail title="🧠 Day Builder — today's own strategy">
+    <Card title="🧠 Day Builder — today's own strategy">
       {off && <Text style={s.muted}>Off for this strategy ({mode === "off" ? "turned off" : "paper only"}). Change it in Settings → Safety.</Text>}
       {building && <Text style={{ color: C.blue, fontWeight: "700" }}>Reading today's market and testing strategies on similar days…</Text>}
       {!cur && !building && <Text style={s.muted}>Builds automatically at 10:15, 11:45 and 13:15 (when no trade is open), or tap below.</Text>}
@@ -308,7 +306,7 @@ function SpreadCard() {
   useEffect(() => { api.spreads().then(setM).catch(() => {}); }, []);
   if (!m) return null;
   return (
-    <Card detail title="📏 Real option spreads">
+    <Card title="📏 Real option spreads">
       {m.median_spread_pct === null ? (
         <Hint>Collecting… Auto Trade saves the option's bid/ask every minute while it runs ({m.days} day(s) so far).
           After 3 days the AI test uses YOUR measured spread instead of the standard 1% estimate.</Hint>
@@ -356,7 +354,7 @@ function ReplayCard({ id }: { id: string }) {
   const v = r?.verdict;
   const vc = v?.level === "good" ? C.green : v?.level === "promising" ? C.blue : v?.level === "unknown" ? C.dim : C.red;
   return (
-    <Card detail title="🔁 Honest test: replay past days">
+    <Card title="🔁 Honest test: replay past days">
       <Hint>
         Runs these exact settings — morning pick, entries, filters, stops, limits — over past days with only the data each day had,
         then compares with random entries using the same rules and costs. Takes a few minutes on the phone.
@@ -714,7 +712,6 @@ export default function AutoTradeScreen({ navigation }: any) {
           <Hint>Buys a monthly in-the-money CE while the 10-day average is above the 50-day, sells when it turns down. A few trades a year — the one idea that held up on 15 years of real data.</Hint>
         </Card>
       </Pressable>
-      {autos.length > 0 && <ReportCard source="auto" mode="all" />}
       <Btn label="📒 Zerodha account — all trades & charges" kind="ghost" onPress={() => navigation.navigate("Zerodha")} />
       {active && <Btn label="⛔ Emergency stop — stop all & sell all" kind="danger" onPress={kill} />}
       {autos.length > 0 && (
@@ -748,8 +745,6 @@ export function AutoDetailScreen({ route, navigation }: any) {
   };
   const tabRef = useRef("now");
   const statsAt = useRef(0);
-  const { detailed } = useView();
-  useEffect(() => { if (!detailed && tabRef.current === "log") setTab("now"); }, [detailed]);
   const load = useCallback(async () => {
     try {
       const x = await api.auto(id);
@@ -862,7 +857,7 @@ export function AutoDetailScreen({ route, navigation }: any) {
             {a.state === "SESSION_COMPLETED" && c.exit_time < "15:00" && (
               <Text style={{ color: C.amber }}>Trading window ended at {c.exit_time}. Change "When to trade" in Settings to trade till 14:45.</Text>
             )}
-            {a.money && detailed ? (
+            {a.money ? (
               <Pressable onPress={() => setShowMoney(!showMoney)} style={{ flexDirection: "row", alignItems: "center" }}>
                 <Text style={[s.muted, { flex: 1, fontSize: 13 }]} numberOfLines={1}>
                   💰 ₹{a.money.capital.toLocaleString("en-IN")} · risk ₹{a.money.risk_per_trade.toLocaleString("en-IN")}/trade · day stop −₹{a.money.day_stop.toLocaleString("en-IN")}
@@ -871,7 +866,7 @@ export function AutoDetailScreen({ route, navigation }: any) {
                 <Text style={{ color: C.blue, fontWeight: "800", fontSize: 13 }}>{showMoney ? "Less" : "More"}</Text>
               </Pressable>
             ) : null}
-        {a.money && showMoney && detailed && (
+        {a.money && showMoney && (
           <View style={{ padding: 10, borderRadius: 10, backgroundColor: C.blue + "10", gap: 2 }}>
             <Text style={s.muted}>
               Automatic money from your {a.money.source}: normal risk {a.money.risk_pct}% per trade (strong setups up to 1.5%) · week stop
@@ -903,8 +898,8 @@ export function AutoDetailScreen({ route, navigation }: any) {
 
       <TabBar value={tab} onChange={setTab} tabs={[
         { key: "now", label: "Now" }, { key: "ai", label: c.strategy_source === "ai" ? "AI pick" : "Strategy" },
-        { key: "orders", label: `Orders · ${sigs.length}` }, { key: "stats", label: "Stats" },
-        { key: "settings", label: "Settings" }, ...(detailed ? [{ key: "log" as const, label: "Log" }] : [])]} />
+        { key: "orders", label: `Orders · ${sigs.length}` }, { key: "stats", label: "Tools" },
+        { key: "settings", label: "Settings" }, { key: "log", label: "Log" }]} />
 
 {tab === "now" && (<>
       {(a.open_positions?.length ?? 0) > 1 ? (
@@ -919,7 +914,7 @@ export function AutoDetailScreen({ route, navigation }: any) {
           <PositionRow p={a.position} onPress={() => navigation.navigate("Position", { id: a.position!.id })} onClose={closePos} />
         </Card>
       ) : null}
-      {a.enabled && a.trend_note ? <Card detail><Text style={{ color: C.text, fontWeight: "700" }}>📈 {a.trend_note}</Text></Card> : null}
+      {a.enabled && a.trend_note ? <Card><Text style={{ color: C.text, fontWeight: "700" }}>📈 {a.trend_note}</Text></Card> : null}
       {a.enabled ? <WatchCard w={a.watch} index={c.index} autoMoney={!!a.money} hidePrice /> : (
         <Card><Text style={s.muted}>Tap ▶ Start to see the live price, which way the market leans and the next order it expects.</Text></Card>
       )}
@@ -958,7 +953,7 @@ export function AutoDetailScreen({ route, navigation }: any) {
                 <Stat label="Win rate" value={`${a.ai_pick.test.win_rate_pct}%`} />
               </Row>
             )}
-            {a.ai_pick.description && detailed ? <Text style={[s.muted, { lineHeight: 19 }]}>{a.ai_pick.description}</Text> : null}
+            {a.ai_pick.description ? <Text style={[s.muted, { lineHeight: 19 }]}>{a.ai_pick.description}</Text> : null}
             <Text style={s.muted}>Picked {a.ai_pick.picked_at.replace("T", " ").slice(0, 16)}{a.ai_pick.combinations_tested ? ` · ${a.ai_pick.combinations_tested} settings tried` : ""}</Text>
           </>)}
           {!a.ai_picking && a.ai_pick && !a.ai_pick.strategy && (<>
@@ -973,15 +968,15 @@ export function AutoDetailScreen({ route, navigation }: any) {
           )}
         </Card>
       )}
-      {detailed && <DayBuildCard b={a.day_build} building={!!a.day_building} mode={c.day_builder ?? "paper"} live={c.mode === "live"}
-        onBuild={() => control("day_build")} busy={busy === "day_build"} />}
+      <DayBuildCard b={a.day_build} building={!!a.day_building} mode={c.day_builder ?? "paper"} live={c.mode === "live"}
+        onBuild={() => control("day_build")} busy={busy === "day_build"} />
       {!a.ai_picking && a.ai_pick?.strategy && (
-        <Section detail title="🔬 How strong is the proof?" summary={a.ai_pick.luck ? `luck check ${a.ai_pick.luck.passed ? "passed" : "not passed"} · costs ₹${Math.round(a.ai_pick.costs?.round_trip ?? 0)}/trade` : "costs, double-cost test, luck check"}>
+        <Section title="🔬 How strong is the proof?" summary={a.ai_pick.luck ? `luck check ${a.ai_pick.luck.passed ? "passed" : "not passed"} · costs ₹${Math.round(a.ai_pick.costs?.round_trip ?? 0)}/trade` : "costs, double-cost test, luck check"}>
           <ProofBox p={a.ai_pick} live={c.mode === "live"} />
         </Section>
       )}
       {c.autopilot && a.ai_pick?.risk_tuning?.best && (
-        <Section detail title="🎯 Stop & target tuning" summary={`stop ${a.ai_pick.risk_tuning.best.stop_mult}× volatility · target ${a.ai_pick.risk_tuning.best.target_rr}× · win ${a.ai_pick.risk_tuning.best.test_win}% on unseen data`}>
+        <Section title="🎯 Stop & target tuning" summary={`stop ${a.ai_pick.risk_tuning.best.stop_mult}× volatility · target ${a.ai_pick.risk_tuning.best.target_rr}× · win ${a.ai_pick.risk_tuning.best.test_win}% on unseen data`}>
           <Text style={[s.muted, { fontWeight: "700" }]}>Stop × · Target × · Win % (unseen) · ₹ per lot</Text>
           {a.ai_pick.risk_tuning.table.map((r, i) => {
             const on = r.stop_mult === a.ai_pick!.risk_tuning!.best.stop_mult && r.target_rr === a.ai_pick!.risk_tuning!.best.target_rr;
@@ -994,7 +989,7 @@ export function AutoDetailScreen({ route, navigation }: any) {
         </Section>
       )}
       {!a.ai_picking && (a.ai_pick?.tested?.length ?? 0) > 0 && (
-        <Section detail title={`📋 All ${a.ai_pick!.tested!.length} strategies tested`}
+        <Section title={`📋 All ${a.ai_pick!.tested!.length} strategies tested`}
           summary={`${a.ai_pick!.tested!.filter((t) => t.robust).length} passed · tap to see why each passed or failed`}>
           {a.ai_pick!.tested!.map((t, i) => (
             <View key={i} style={{ paddingVertical: 8, borderTopWidth: i ? 1 : 0, borderTopColor: C.border, gap: 3 }}>
@@ -1023,14 +1018,12 @@ export function AutoDetailScreen({ route, navigation }: any) {
             <Stat label="Entry" value={sig.entry_price?.toFixed?.(2) ?? "—"} />
             <Stat label="Stop" value={sig.stop_loss?.toFixed?.(2) ?? "—"} color={C.red} />
             <Stat label="Target" value={sig.target_price?.toFixed?.(2) ?? "—"} color={C.green} />
-            {detailed && <Stat label="Qty" value={`${sig.quantity ?? "—"} (${sig.lots} lot)`} />}
+            <Stat label="Qty" value={`${sig.quantity ?? "—"} (${sig.lots} lot)`} />
             <Stat label="Max loss" value={inr(sig.est_max_loss)} color={C.red} />
-            {detailed && <Stat label="Confidence" value={`${sig.confidence}%`} />}
+            <Stat label="Confidence" value={`${sig.confidence}%`} />
           </Row>
-          {detailed ? <WhyList why={sig.why as WhyItem[] | undefined} />
-            : sig.risk_check !== "PASS" && sig.risk_problems?.length
-              ? <Text style={{ color: C.amber, fontWeight: "700" }}>⚠ {sig.risk_problems[0]}</Text> : null}
-          {detailed && !sig.why && sig.reason ? <Text style={s.muted}>Why: {sig.reason}</Text> : null}
+          <WhyList why={sig.why as WhyItem[] | undefined} />
+          {!sig.why && sig.reason ? <Text style={s.muted}>Why: {sig.reason}</Text> : null}
           <Text style={s.muted}>Signal {when(String(sig.signal_time))} IST</Text>
         </Card>
       )}
@@ -1050,7 +1043,7 @@ export function AutoDetailScreen({ route, navigation }: any) {
                 </View>
                 <Badge text={x.risk_check === "PASS" ? "PLACED" : "SKIPPED"} color={x.risk_check === "PASS" ? C.green : C.amber} />
               </View>
-              {!detailed ? null : openSig === i ? <WhyList why={x.why as WhyItem[] | undefined} /> : <Text style={s.muted}>Tap for reasons</Text>}
+              {openSig === i ? <WhyList why={x.why as WhyItem[] | undefined} /> : <Text style={s.muted}>Tap for reasons</Text>}
             </Pressable>
           ))}
         </Card>
@@ -1058,69 +1051,13 @@ export function AutoDetailScreen({ route, navigation }: any) {
       </>)}
 
 {tab === "stats" && (<>
-      {!stats && <Card><Text style={s.muted}>Loading results…</Text></Card>}
-      {stats && (
-        <Card title="Results">
-          <Row gap={8}>
-            <Stat label="Net after costs" value={inr(stats.net_after_costs)} color={pnlColor(stats.net_after_costs)} />
-            <Stat label="Trades" value={String(stats.closed_trades)} />
-            <Stat label="Win rate" value={`${stats.win_rate_pct}%`} />
-            <Stat label="Profit factor" value={stats.profit_factor?.toString() ?? "—"} />
-            <Stat label="Avg win ÷ avg loss" value={stats.avg_win_loss_ratio?.toString() ?? "—"} />
-            <Stat label="Worst drop" value={inr(stats.max_drawdown)} color={C.red} />
-          </Row>
-          <Hint>Profit factor = ₹ won ÷ ₹ lost (above 1 = making money). Paper results use simulated fills on live prices.</Hint>
-        </Card>
-      )}
-      {stats?.scorecard && <ScorecardCard sc={stats.scorecard} versions={stats.versions} />}
-      <Detail>
-      {stats && (stats.costs_share_pct !== undefined) && (
-        <Section title="💸 What costs take" summary={`charges ${inr(stats.total_charges)} · ${stats.costs_share_pct ?? "—"}% of gross profit · ${inr(stats.avg_cost_per_trade ?? 0)}/trade`}>
-          <Row gap={8}>
-            <Stat label="Gross before costs" value={inr(stats.gross_before_costs)} color={pnlColor(stats.gross_before_costs)} />
-            <Stat label="Charges" value={inr(stats.total_charges)} color={C.red} />
-            <Stat label="Share of gross" value={stats.costs_share_pct !== null ? `${stats.costs_share_pct}%` : "—"} />
-            <Stat label="Per trade" value={inr(stats.avg_cost_per_trade ?? 0)} />
-          </Row>
-          {(stats.daily ?? []).slice(0, 7).map((d: any) => (
-            <View key={d.day} style={{ flexDirection: "row", paddingVertical: 2 }}>
-              <Text style={[s.muted, { flex: 1 }]}>{when(d.day + "T00:00").slice(0, -6)} · {d.trades} trades</Text>
-              <Text style={{ color: pnlColor(d.net), fontWeight: "700" }}>{inr(d.net)}</Text>
-              <Text style={[s.muted, { width: 90, textAlign: "right" }]}>costs {inr(d.charges ?? 0)}</Text>
-            </View>
-          ))}
-          <Hint>Charges only (brokerage, STT, exchange, GST, stamp). Slippage is already inside the fill prices.</Hint>
-        </Section>
-      )}
+      {!stats && <Card><Text style={s.muted}>Loading…</Text></Card>}
+      <Pressable onPress={() => navigation.navigate("Tabs", { screen: "History", params: { seg: "performance" } })}
+        style={{ paddingVertical: 12, alignItems: "center", borderRadius: 12, borderWidth: 1, borderColor: C.border, backgroundColor: C.card }}>
+        <Text style={{ color: C.blue, fontWeight: "800" }}>🕘 Past results, costs & scorecard — in History ›</Text>
+      </Pressable>
       {stats?.tuning && <TuningCard t={stats.tuning} />}
-      {stats && <Breakdown stats={stats} />}
       <ReplayCard id={a.id} />
-      <ReportCard source="auto" mode={c.mode === "live" ? "live" : "paper"} />
-      {stats && Object.keys(stats.skipped ?? {}).length > 0 && (
-        <Section title="Why signals were skipped"
-          summary={Object.entries(stats.skipped as Record<string, number>).slice(0, 3).map(([k, n]) => `${k} ${n}`).join(" · ")}>
-          {Object.entries(stats.skipped as Record<string, number>).map(([k, n]) => (
-            <View key={k} style={{ flexDirection: "row", paddingVertical: 3 }}>
-              <Text style={[s.text, { flex: 1 }]}>{k}</Text>
-              <Text style={{ color: C.text, fontWeight: "800" }}>{n}</Text>
-            </View>
-          ))}
-          <Hint>Skipping is the filters doing their job. If one reason blocks almost everything, check that setting.</Hint>
-        </Section>
-      )}
-      {stats && (
-        <Section title="Order execution quality"
-          summary={`fills ${stats.fill_rate_pct ?? "—"}% · slippage ${stats.avg_entry_slippage_pct ?? "—"}% · rejected ${stats.orders_rejected}`}>
-          <Row gap={8}>
-            <Stat label="Signal→order" value={stats.signal_to_order_pct !== null ? `${stats.signal_to_order_pct}%` : "—"} />
-            <Stat label="Order accepted" value={stats.order_acceptance_pct !== null ? `${stats.order_acceptance_pct}%` : "—"} />
-            <Stat label="Filled" value={stats.fill_rate_pct !== null ? `${stats.fill_rate_pct}%` : "—"} />
-            <Stat label="Avg slippage" value={stats.avg_entry_slippage_pct !== null ? `${stats.avg_entry_slippage_pct}%` : "—"} />
-            <Stat label="Rejected" value={String(stats.orders_rejected)} />
-            <Stat label="Target / stop exits" value={`${stats.target_exits} / ${stats.stop_exits}`} />
-          </Row>
-        </Section>
-      )}
       <SpreadCard />
       {a.levels?.prev_high !== undefined && (
         <Section title="Today's key levels" summary={`pivot ${a.levels.P} · prev close ${a.levels.prev_close} · gap ${a.levels.gap_pct ?? "—"}%`}>
@@ -1146,8 +1083,6 @@ export function AutoDetailScreen({ route, navigation }: any) {
           </Text>
         )}
       </Section>
-      </Detail>
-      {!detailed && <Text style={[s.muted, { textAlign: "center" }]}>Costs, tuning, replay, reports and execution quality: tap ◧ Simple at the top to switch to Detailed</Text>}
       </>)}
 
 {tab === "settings" && (<>
@@ -1359,5 +1294,70 @@ function Breakdown({ stats }: { stats: Record<string, any> }) {
         ))}
       </Card>
     )}
+  </>);
+}
+
+
+/** Everything this Auto Trade has done on earlier days and in total — shown in History → Performance. */
+export function AutoPerformance({ stats }: { stats: Record<string, any> }) {
+  return (<>
+      {stats && (
+        <Card title="Results">
+          <Row gap={8}>
+            <Stat label="Net after costs" value={inr(stats.net_after_costs)} color={pnlColor(stats.net_after_costs)} />
+            <Stat label="Trades" value={String(stats.closed_trades)} />
+            <Stat label="Win rate" value={`${stats.win_rate_pct}%`} />
+            <Stat label="Profit factor" value={stats.profit_factor?.toString() ?? "—"} />
+            <Stat label="Avg win ÷ avg loss" value={stats.avg_win_loss_ratio?.toString() ?? "—"} />
+            <Stat label="Worst drop" value={inr(stats.max_drawdown)} color={C.red} />
+          </Row>
+          <Hint>Profit factor = ₹ won ÷ ₹ lost (above 1 = making money). Paper results use simulated fills on live prices.</Hint>
+        </Card>
+      )}
+      {stats?.scorecard && <ScorecardCard sc={stats.scorecard} versions={stats.versions} />}
+      {stats && (stats.costs_share_pct !== undefined) && (
+        <Section title="💸 What costs take" summary={`charges ${inr(stats.total_charges)} · ${stats.costs_share_pct ?? "—"}% of gross profit · ${inr(stats.avg_cost_per_trade ?? 0)}/trade`}>
+          <Row gap={8}>
+            <Stat label="Gross before costs" value={inr(stats.gross_before_costs)} color={pnlColor(stats.gross_before_costs)} />
+            <Stat label="Charges" value={inr(stats.total_charges)} color={C.red} />
+            <Stat label="Share of gross" value={stats.costs_share_pct !== null ? `${stats.costs_share_pct}%` : "—"} />
+            <Stat label="Per trade" value={inr(stats.avg_cost_per_trade ?? 0)} />
+          </Row>
+          {(stats.daily ?? []).slice(0, 7).map((d: any) => (
+            <View key={d.day} style={{ flexDirection: "row", paddingVertical: 2 }}>
+              <Text style={[s.muted, { flex: 1 }]}>{when(d.day + "T00:00").slice(0, -6)} · {d.trades} trades</Text>
+              <Text style={{ color: pnlColor(d.net), fontWeight: "700" }}>{inr(d.net)}</Text>
+              <Text style={[s.muted, { width: 90, textAlign: "right" }]}>costs {inr(d.charges ?? 0)}</Text>
+            </View>
+          ))}
+          <Hint>Charges only (brokerage, STT, exchange, GST, stamp). Slippage is already inside the fill prices.</Hint>
+        </Section>
+      )}
+      <Breakdown stats={stats} />
+      {stats && Object.keys(stats.skipped ?? {}).length > 0 && (
+        <Section title="Why signals were skipped"
+          summary={Object.entries(stats.skipped as Record<string, number>).slice(0, 3).map(([k, n]) => `${k} ${n}`).join(" · ")}>
+          {Object.entries(stats.skipped as Record<string, number>).map(([k, n]) => (
+            <View key={k} style={{ flexDirection: "row", paddingVertical: 3 }}>
+              <Text style={[s.text, { flex: 1 }]}>{k}</Text>
+              <Text style={{ color: C.text, fontWeight: "800" }}>{n}</Text>
+            </View>
+          ))}
+          <Hint>Skipping is the filters doing their job. If one reason blocks almost everything, check that setting.</Hint>
+        </Section>
+      )}
+      {stats && (
+        <Section title="Order execution quality"
+          summary={`fills ${stats.fill_rate_pct ?? "—"}% · slippage ${stats.avg_entry_slippage_pct ?? "—"}% · rejected ${stats.orders_rejected}`}>
+          <Row gap={8}>
+            <Stat label="Signal→order" value={stats.signal_to_order_pct !== null ? `${stats.signal_to_order_pct}%` : "—"} />
+            <Stat label="Order accepted" value={stats.order_acceptance_pct !== null ? `${stats.order_acceptance_pct}%` : "—"} />
+            <Stat label="Filled" value={stats.fill_rate_pct !== null ? `${stats.fill_rate_pct}%` : "—"} />
+            <Stat label="Avg slippage" value={stats.avg_entry_slippage_pct !== null ? `${stats.avg_entry_slippage_pct}%` : "—"} />
+            <Stat label="Rejected" value={String(stats.orders_rejected)} />
+            <Stat label="Target / stop exits" value={`${stats.target_exits} / ${stats.stop_exits}`} />
+          </Row>
+        </Section>
+      )}
   </>);
 }

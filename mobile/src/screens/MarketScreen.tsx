@@ -44,6 +44,15 @@ export default function MarketScreen({ navigation }: any) {
 
   return (
     <Screen refresh={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} tintColor={C.dim} />}>
+      <Pressable onPress={() => navigation.navigate("Finder")}
+        style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: 14, backgroundColor: C.blue + "12", borderWidth: 1, borderColor: C.blue + "44" }}>
+        <Text style={{ fontSize: 18, color: C.blue }}>✦</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: C.blue, fontWeight: "800" }}>AI Strategy Finder</Text>
+          <Text style={{ color: C.dim, fontSize: 12 }}>Test every strategy on any stock or index</Text>
+        </View>
+        <Text style={{ color: C.blue, fontWeight: "800" }}>›</Text>
+      </Pressable>
       <View style={[s.input, { flexDirection: "row", alignItems: "center", gap: 8 }]}>
         <Text style={{ color: C.dim, fontSize: 16 }}>⌕</Text>
         <TextInput value={q} onChangeText={setQ} placeholder="Search any stock or index (e.g. RELIANCE, NIFTY IT)"

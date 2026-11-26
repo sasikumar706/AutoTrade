@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Alert, Pressable, RefreshControl, Text, View } from "react-native";
-import { api, inr } from "../api";
+import { api, inr, todayKey } from "../api";
 import { ActionBtn, Badge, Btn, C, Card, Chips, ErrorText, Field, InfoLine, Row, Screen, Section, Stat, contractText, pnlColor, s, when, Hint } from "../ui";
 import { usePollOnFocus } from "../usePoll";
 
@@ -149,9 +149,13 @@ export default function SwingScreen({ navigation, route }: any) {
         </Card>
       )}
 
-      {w && (w.trades?.length ?? 0) > 0 && (
-        <Section detail title="📒 Swing trades" summary={`${w.trades.length} · net ${inr(w.trades.reduce((a: number, t: any) => a + (t.net ?? 0), 0))}`}>
-          {w.trades.map((t: any) => (
+      {w && (w.trades?.length ?? 0) > 0 && (() => {
+        const now = (w.trades as any[]).filter((t) => !t.exit_time || String(t.exit_time).slice(0, 10) === todayKey());
+        const past = w.trades.length - now.length;
+        return (
+        <Card title="📒 Swing trades · open & today">
+          {now.length === 0 ? <Text style={s.muted}>No open or today's swing trade.</Text> : null}
+          {now.map((t: any) => (
             <Pressable key={t.id} onPress={() => navigation.navigate("Position", { id: t.id })}
               style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: C.border }}>
               <View style={{ flex: 1 }}>
@@ -163,10 +167,12 @@ export default function SwingScreen({ navigation, route }: any) {
               <Text style={{ color: pnlColor(t.net ?? t.unrealized), fontWeight: "800" }}>{inr(t.net ?? t.unrealized)}</Text>
             </Pressable>
           ))}
-        </Section>
-      )}
+          {past > 0 && <Text onPress={() => navigation.navigate("Tabs", { screen: "History", params: { seg: "performance" } })}
+            style={{ color: C.blue, fontWeight: "700", paddingTop: 8 }}>🕘 {past} earlier swing trade{past === 1 ? "" : "s"} — in History ›</Text>}
+        </Card>);
+      })()}
 
-      <Card detail title="📊 How this rule did on past data">
+      <Card title="📊 How this rule did on past data">
         <Hint>Runs the same rule on up to 10 years of daily {w?.config.index ?? newIx} candles from Kite, 1 lot, option priced from India VIX.</Hint>
         <Btn label={busy === "bt" ? "Testing…" : `Test on ${w?.config.index ?? newIx}`} kind="ghost" onPress={() => runBacktest(w?.config.index ?? newIx)} loading={busy === "bt"} />
         {bt && (<>
@@ -262,7 +268,7 @@ export default function SwingScreen({ navigation, route }: any) {
       )}
 
       {w && (w.timeline?.length ?? 0) > 0 && (
-        <Section detail title="📜 Log" summary={w.timeline[w.timeline.length - 1]?.msg}>
+        <Section title="📜 Log" summary={w.timeline[w.timeline.length - 1]?.msg}>
           {[...w.timeline].reverse().slice(0, 30).map((e: any, i: number) => (
             <Text key={i} style={[s.muted, { fontSize: 13 }]}>{when(e.t)} · {e.msg}</Text>
           ))}

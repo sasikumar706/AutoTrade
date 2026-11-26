@@ -21,10 +21,9 @@ import ZerodhaScreen from "./src/screens/ZerodhaScreen";
 import SwingScreen from "./src/screens/SwingScreen";
 import { MODE_INFO, ModeChip, ModeProvider, useMode } from "./src/mode";
 import AutoHomeScreen from "./src/screens/AutoHomeScreen";
-import PnlHistoryScreen from "./src/screens/PnlHistoryScreen";
+import HistoryScreen from "./src/screens/HistoryScreen";
 import { C } from "./src/ui";
 import { CrashGuard, installGlobalErrorHandler } from "./src/CrashGuard";
-import { ViewChip, ViewProvider } from "./src/view";
 
 installGlobalErrorHandler();
 
@@ -60,8 +59,7 @@ function Tabs() {
       headerStyle: { backgroundColor: C.card }, headerShadowVisible: false,
       headerTitleStyle: { color: C.ink, fontWeight: "800", fontSize: 19 },
       headerRight: () => (
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingRight: 14 }}>
-          <ViewChip />
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingRight: 14 }}>
           <ModeChip onPress={() => navigation.navigate("Settings")} />
           <Pressable onPress={() => navigation.navigate("Settings")} hitSlop={12}>
             <Text style={{ color: C.dim, fontSize: 20 }}>⚙</Text>
@@ -69,13 +67,13 @@ function Tabs() {
         </View>
       ),
     })}>
-      <Tab.Screen name="Home" component={HomeScreen} options={{ title: "Kite Algo", tabBarIcon: icon("🏠") }} />
+      <Tab.Screen name="Home" component={HomeScreen} options={{ title: "Today", tabBarLabel: "Home", tabBarIcon: icon("🏠") }} />
       <Tab.Screen name="Auto" component={AutoHomeScreen}
         options={{ title: auto ? "Auto · on" : "Auto · off", tabBarLabel: "Auto", tabBarIcon: icon("⚡") }} />
       <Tab.Screen name="Trade" component={TradeScreen}
         options={{ title: `${info.label} trading`, tabBarLabel: info.label, tabBarIcon: icon(info.icon) }} />
-      <Tab.Screen name="Finder" component={AiScreen} options={{ title: "AI Strategy Finder", tabBarLabel: "AI Finder", tabBarIcon: icon("🔎") }} />
       <Tab.Screen name="Market" component={MarketScreen} options={{ title: "Market", tabBarIcon: icon("📊") }} />
+      <Tab.Screen name="History" component={HistoryScreen} options={{ title: "History", tabBarIcon: icon("🕘") }} />
     </Tab.Navigator>
   );
 }
@@ -85,16 +83,14 @@ function Root() {
     <NavigationContainer theme={theme}>
       <StatusBar style="dark" />
       <Stack.Navigator screenOptions={{ headerStyle: { backgroundColor: C.card }, headerShadowVisible: false,
-        headerTitleStyle: { color: C.ink, fontWeight: "800" }, headerTintColor: C.blue, contentStyle: { backgroundColor: C.bg },
-        headerRight: () => <ViewChip /> }}>
+        headerTitleStyle: { color: C.ink, fontWeight: "800" }, headerTintColor: C.blue, contentStyle: { backgroundColor: C.bg } }}>
         <Stack.Screen name="Tabs" component={Tabs} options={{ headerShown: false }} />
         <Stack.Screen name="BacktestResult" component={BacktestResultScreen} options={{ title: "Backtest result" }} />
         <Stack.Screen name="Session" component={SessionScreen} options={{ title: "Session" }} />
         <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: "Settings" }} />
         <Stack.Screen name="OptionsResult" component={OptionsResultScreen} options={{ title: "Options backtest" }} />
         <Stack.Screen name="Position" component={PositionScreen} options={{ title: "Position" }} />
-        <Stack.Screen name="PnlHistory" component={PnlHistoryScreen}
-          options={({ route }: any) => ({ title: `${route?.params?.mode === "live" ? "Live" : "Paper"} P&L history` })} />
+        <Stack.Screen name="Finder" component={AiScreen} options={{ title: "AI Strategy Finder" }} />
         <Stack.Screen name="Quote" component={QuoteScreen} options={{ title: "Quote" }} />
         <Stack.Screen name="AutoAdvanced" component={AutoTradeScreen} options={{ title: "My own strategies" }} />
         <Stack.Screen name="AutoDetail" component={AutoDetailScreen} options={{ title: "Auto Trade" }} />
@@ -109,11 +105,9 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <CrashGuard>
-      <ViewProvider>
       <ModeProvider>
         <Root />
       </ModeProvider>
-      </ViewProvider>
       </CrashGuard>
     </SafeAreaProvider>
   );
