@@ -13,7 +13,6 @@ import PositionScreen from "./src/screens/PositionScreen";
 import { TradeScreen } from "./src/screens/TradeTabs";
 import BacktestResultScreen from "./src/screens/BacktestResultScreen";
 import HomeScreen from "./src/screens/HomeScreen";
-import MarketScreen from "./src/screens/MarketScreen";
 import QuoteScreen from "./src/screens/QuoteScreen";
 import SessionScreen from "./src/screens/SessionScreen";
 import SettingsScreen from "./src/screens/SettingsScreen";
@@ -70,9 +69,6 @@ function Tabs() {
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: "Today", tabBarLabel: "Home", tabBarIcon: icon("🏠") }} />
       <Tab.Screen name="Auto" component={AutoHomeScreen}
         options={{ title: auto ? "Auto · on" : "Auto · off", tabBarLabel: "Auto", tabBarIcon: icon("⚡") }} />
-      <Tab.Screen name="Trade" component={TradeScreen}
-        options={{ title: `${info.label} trading`, tabBarLabel: info.label, tabBarIcon: icon(info.icon) }} />
-      <Tab.Screen name="Market" component={MarketScreen} options={{ title: "Market", tabBarIcon: icon("📊") }} />
       <Tab.Screen name="History" component={HistoryScreen} options={{ title: "History", tabBarIcon: icon("🕘") }} />
     </Tab.Navigator>
   );
@@ -85,6 +81,8 @@ function Root() {
       <Stack.Navigator screenOptions={{ headerStyle: { backgroundColor: C.card }, headerShadowVisible: false,
         headerTitleStyle: { color: C.ink, fontWeight: "800" }, headerTintColor: C.blue, contentStyle: { backgroundColor: C.bg } }}>
         <Stack.Screen name="Tabs" component={Tabs} options={{ headerShown: false }} />
+        {/* no longer a tab; kept only so AI Finder's "trade this" still opens a ticket */}
+        <Stack.Screen name="Trade" component={TradeScreen} options={{ title: "Place a trade" }} />
         <Stack.Screen name="BacktestResult" component={BacktestResultScreen} options={{ title: "Backtest result" }} />
         <Stack.Screen name="Session" component={SessionScreen} options={{ title: "Session" }} />
         <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: "Settings" }} />

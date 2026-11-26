@@ -98,9 +98,8 @@ export default function HomeScreen({ navigation }: any) {
 
       {/* open positions */}
       <Card>
-        <Label text={`Open positions · ${open.length}`} right={
-          <Text onPress={() => navigation.navigate("Trade")} style={{ color: C.blue, fontWeight: "800" }}>Trade ›</Text>} />
-        {open.length === 0 ? <Empty icon="◎" text="No open positions" sub={auto ? "Auto will open one when its signal fires." : "Place one from the Trade tab."} />
+        <Label text={`Open positions · ${open.length}`} />
+        {open.length === 0 ? <Empty icon="◎" text="No open positions" sub={auto ? "Auto will open one when its signal fires." : "Switch Auto on to start trading."} />
           : open.map((p) => <PositionRow key={p.id} p={p} onPress={() => navigation.navigate("Position", { id: p.id })} />)}
       </Card>
 
@@ -123,13 +122,12 @@ export default function HomeScreen({ navigation }: any) {
       {/* today's closed trades */}
       <Card>
         <Label text={`Closed today · ${closed.length}`} right={closed.length ? <Text style={{ color: pnlColor(realised), fontWeight: "900" }}>{rupee(realised, true)}</Text> : undefined} />
-        {closed.length === 0 ? <Empty icon="✓" text="Nothing closed yet today" /> : closed.slice(0, 8).map((p, i) => (
+        {closed.length === 0 ? <Empty icon="✓" text="Nothing closed yet today" /> : closed.map((p, i) => (
           <ListRow key={p.id} first={i === 0} onPress={() => navigation.navigate("Position", { id: p.id })}
             left={<Text style={{ color: C.dim, width: 40, fontSize: 12 }}>{hhmm(p.entry_time)}</Text>}
             title={p.spec.tradingsymbol} sub={`${String(p.spec.source ?? "manual").split(":")[0]} · ${p.entry_price ?? "—"} → ${p.exit_price ?? "—"}`}
             value={rupee(p.net, true)} valueColor={pnlColor(p.net)} />
         ))}
-        {closed.length > 8 && <Text onPress={() => navigation.navigate("Trade")} style={{ color: C.blue, fontWeight: "700", paddingTop: 8 }}>All {closed.length} in Trade ›</Text>}
       </Card>
 
       <QuickActions items={[

@@ -110,10 +110,10 @@ export default function AiScreen({ navigation, route }: any) {
     if (!index) return;
     const go = () => {
       setMode(target);
-      navigation.navigate("Tabs", { screen: "Trade", params: { prefill: {
+      navigation.navigate("Trade", { prefill: {
         index, optionType, nonce: Date.now(),
         note: `AI Finder${r ? `: ${r.name} says ${r.now.action}` : ""} → BUY ${index} ${optionType} (ATM)`,
-      } } });
+      } });
     };
     if (target === "paper") return go();
     Alert.alert("Switch to LIVE mode?", `Opens the live order ticket with BUY ${index} ${optionType} (ATM) filled in. Nothing is sent until you review and confirm the order.`, [
