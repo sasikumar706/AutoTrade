@@ -17,7 +17,7 @@ export default function SwingScreen({ navigation, route }: any) {
   const [newIx, setNewIx] = useState<Ix>("BANKNIFTY");
   const [lots, setLots] = useState("1");
   const [maxPrem, setMaxPrem] = useState("");
-  const [capital, setCapital] = useState("200000");
+  const [capital, setCapital] = useState("1000000");
   const [alloc, setAlloc] = useState<"10" | "20" | "25">("10");
   const [maxLots, setMaxLots] = useState("10");
   const [sizing, setSizing] = useState<"capital" | "fixed">("capital");
@@ -46,7 +46,7 @@ export default function SwingScreen({ navigation, route }: any) {
     if (detail?.config) {
       const c = detail.config;
       setLots(String(c.lots)); setMaxPrem(c.max_premium ? String(c.max_premium) : "");
-      setCapital(String(c.capital ?? 200000)); setAlloc((["10", "20", "25"].includes(String(c.alloc_pct)) ? String(c.alloc_pct) : "10") as any);
+      setCapital(String(c.capital ?? 1000000)); setAlloc((["10", "20", "25"].includes(String(c.alloc_pct)) ? String(c.alloc_pct) : "10") as any);
       setMaxLots(String(c.max_lots ?? 10)); setSizing(c.sizing ?? "capital"); setMode(c.mode ?? "paper");
       setItm(String(c.itm_strikes ?? 2) as any); setBook((["0", "4", "6"].includes(String(c.book_half_pct)) ? String(c.book_half_pct) : "6") as any);
       setTrail((["0", "3", "4"].includes(String(c.trail_atr)) ? String(c.trail_atr) : "0") as any);
@@ -258,7 +258,7 @@ export default function SwingScreen({ navigation, route }: any) {
           <Text style={s.label}>Trailing exit (also sell after a sharp drop from the best close)</Text>
           <Chips options={["0", "3", "4"] as const} value={trail} onChange={setTrail} labels={{ "0": "Off", "3": "3 daily ranges", "4": "4 daily ranges" }} />
           <Btn label="Save" onPress={() => run("save", () => api.updateSwing(w.id, { ...w.config, mode, sizing, lots: Number(lots) || 1, max_premium: Number(maxPrem) || 0,
-            capital: Number(capital) || 200000, alloc_pct: Number(alloc), max_lots: Number(maxLots) || 10,
+            capital: Number(capital) || 1000000, alloc_pct: Number(alloc), max_lots: Number(maxLots) || 10,
             itm_strikes: Number(itm), book_half_pct: Number(book), trail_atr: Number(trail), crash_guard_atr: Number(guard), max_loss_pct: Number(maxLoss) }))}
             loading={busy === "save"} />
           {!open && <Btn label="Delete this swing strategy" kind="ghost" onPress={() =>
@@ -283,7 +283,7 @@ export default function SwingScreen({ navigation, route }: any) {
         <Chips options={["NIFTY", "BANKNIFTY", "SENSEX"] as const} value={newIx} onChange={setNewIx} />
         <Btn label="Create (paper)" onPress={() => run("create", async () => {
           const c = await api.createSwing({ index: newIx, lots: Number(lots) || 1, mode: "paper", max_premium: Number(maxPrem) || 0,
-            sizing, capital: Number(capital) || 200000, alloc_pct: Number(alloc), max_lots: Number(maxLots) || 10,
+            sizing, capital: Number(capital) || 1000000, alloc_pct: Number(alloc), max_lots: Number(maxLots) || 10,
             itm_strikes: Number(itm), book_half_pct: Number(book), trail_atr: Number(trail), crash_guard_atr: Number(guard), max_loss_pct: Number(maxLoss) });
           setSel(c.id);
         })} loading={busy === "create"} />

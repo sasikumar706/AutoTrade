@@ -143,3 +143,11 @@ def test_swing_roll_counts_the_old_contracts_pnl_when_its_sell_fills_later():
     old.on_order_update({"order_id": old.exit_order_id, "status": "COMPLETE", "average_price": 120.0})
     w.settle()
     assert w.realized == round(old.net, 2) and old.net > 0 and w.closing == []
+
+
+def test_default_capital_is_ten_lakh():
+    from app.autotrade import AutoConfig
+    from app.options_manager import OptionsManager
+    from app.swing import SwingConfig
+    assert OptionsManager.APP_DEFAULTS["capital"] == 1_000_000.0
+    assert AutoConfig().paper_capital == 1_000_000.0 and SwingConfig().capital == 1_000_000.0

@@ -959,7 +959,7 @@ def test_autopilot_fixed_index_only_tests_that_index(monkeypatch):
     assert set(calls) == {"BANKNIFTY"} and len(calls) == 2
     assert a.cfg.index == "BANKNIFTY" and a.spot["tradingsymbol"] == "NIFTY BANK"
     d = AutoConfig()
-    assert d.max_trades_per_day == 10 and d.paper_capital == 300_000.0 and d.max_auto_lots == 10 and d.autopilot_index == "ANY"
+    assert d.max_trades_per_day == 10 and d.paper_capital == 1_000_000.0 and d.max_auto_lots == 10 and d.autopilot_index == "ANY"
     with pytest.raises(ValueError):
         AutoConfig(autopilot=True, autopilot_index="FINNIFTY").validate()
 

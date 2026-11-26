@@ -187,7 +187,7 @@ class AutoConfig:
     # ---- automatic money management (Autopilot): the app decides capital use, risk, lots and limits
     autopilot_index: str = "ANY"  # Autopilot: "ANY" = AI chooses among NIFTY/BANKNIFTY/SENSEX, or one fixed index
     auto_money: bool = True
-    paper_capital: float = 300_000.0  # PAPER: pretend account size (LIVE uses the real Kite funds)
+    paper_capital: float = 1_000_000.0  # PAPER: pretend account size (LIVE uses the real Kite funds)
     max_auto_lots: int = 10  # automatic money: the most lots one trade may use (risk usually allows fewer)
     max_stop_pts: float = 50.0  # premium points: the stop is never further than this from the entry (0 = off) —
     max_target_pts: float = 80.0  # ...and the target never further than this; a tighter stop lets sizing use MORE lots

@@ -280,6 +280,10 @@ class OptionsManager:
             self.autos[a.id] = a
         self._load_swings()
         try:
+            self._migrate_default_capital()
+        except Exception:
+            pass
+        try:
             self._managed_upkeep()
         except Exception:
             pass
@@ -840,8 +844,30 @@ class OptionsManager:
         return out
 
     # ------------------------------------------------------------ app settings: Paper/Live + Auto/Manual
-    APP_DEFAULTS = {"money": "paper", "auto": False, "intraday": True, "swing": True, "capital": 300_000.0,
+    APP_DEFAULTS = {"money": "paper", "auto": False, "intraday": True, "swing": True, "capital": 1_000_000.0,
                     "swing_index": "BANKNIFTY"}
+
+    OLD_DEFAULT_CAPITAL = 300_000.0
+
+    def _migrate_default_capital(self):
+        """Default capital is now ₹10,00,000. A setup still on the old ₹3,00,000 default (never changed) moves up
+        once, and the app's own Autopilot / Swing follow it. A capital you typed yourself is left alone."""
+        st = self.store.get("app_settings") or {}
+        if st.get("capital_default_v2"):
+            return
+        if float(st.get("capital", self.OLD_DEFAULT_CAPITAL)) == self.OLD_DEFAULT_CAPITAL:
+            st["capital"] = self.APP_DEFAULTS["capital"]
+            for ids in (st.get("managed") or {}).values():
+                a = self.autos.get(ids.get("auto", ""))
+                if a is not None and a.cfg.paper_capital == self.OLD_DEFAULT_CAPITAL:
+                    a.cfg.paper_capital = st["capital"]
+                    self._save_auto(a)
+                w = self.swings.get(ids.get("swing", ""))
+                if w is not None and float(w.cfg.capital) in (self.OLD_DEFAULT_CAPITAL, 200_000.0):
+                    w.cfg.capital = st["capital"]
+                    self._save_swing(w)
+        st["capital_default_v2"] = True
+        self.store.set("app_settings", st)
 
     def _app_raw(self) -> dict:
         d = dict(self.APP_DEFAULTS)

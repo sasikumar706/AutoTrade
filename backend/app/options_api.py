@@ -146,7 +146,7 @@ class SwingRequest(BaseModel):
     max_loss_pct: float = 2.0
     max_premium: float = 0.0
     sizing: str = "capital"
-    capital: float = 200000.0
+    capital: float = 1_000_000.0
     alloc_pct: float = 10.0
     max_lots: int = 10
     itm_strikes: int = 2

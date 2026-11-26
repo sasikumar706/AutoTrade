@@ -47,7 +47,7 @@ class SwingConfig:
     max_loss_pct: float = 2.0  # one trade never loses more than this % of the strategy's money: the stop is set so (0 = off)
     max_premium: float = 0.0  # ₹ cap on premium per entry (0 = no cap)
     sizing: str = "capital"  # capital = lots grow/shrink with your money | fixed = always `lots`
-    capital: float = 200_000.0  # starting money for capital sizing (profits and losses of this strategy are added)
+    capital: float = 1_000_000.0  # starting money for capital sizing (profits and losses of this strategy are added)
     alloc_pct: float = 10.0  # % of current money put into premium at each buy / roll (10% = smaller worst drops)
     max_lots: int = 10  # never more than this many lots
     itm_strikes: int = 2  # how far in the money (2 tested slightly better than 1: less time decay, moves more with the index)
