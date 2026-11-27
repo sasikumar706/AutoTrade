@@ -55,6 +55,7 @@ class SwingConfig:
     #                             lots it gave more winning trades, a higher end amount and a smaller worst drop; with 1 fixed
     #                             lot it gave less total profit (and in 2008-16 it was worse) — the price of locking profit early
     trail_atr: float = 0.0  # also exit if the index closes this many daily ranges (ATR) below its best close (0 = off)
+    red_day_wait: bool = True  # don't START a new buy on a day the index is down (wait for a green close; rolls unaffected)
     crash_guard_atr: float = 2.0  # watched every minute: sell at once if the index trades this many daily ranges below
     #                               yesterday's close (0 = off). Roughly halved the worst drop in both test periods.
 
@@ -410,9 +411,16 @@ class SwingTrader:
             return
         self.check(now)
 
-    def check(self, now: datetime) -> dict:
+    def in_window(self, now: datetime) -> bool:
+        return self.cfg.check_time <= now.strftime("%H:%M") <= "15:25"
+
+    def check(self, now: datetime, trade: bool = True) -> dict:
+        """The daily decision. trade=False ("Check now" before the decision time) only reports what it would do —
+        the swing rule is tested on closing prices, so it must not buy or sell on a mid-day price."""
         with self.lock:
             self.settle()
+            if not trade:
+                return self._preview(now)
             self.last_check = now.date().isoformat()
             try:
                 df = self.daily_frame(now)
@@ -420,10 +428,13 @@ class SwingTrader:
                 tr = pd.concat([df["high"] - df["low"], (df["high"] - df["close"].shift()).abs(),
                                 (df["low"] - df["close"].shift()).abs()], axis=1).max(axis=1)
                 atr = float(tr.rolling(14).mean().iloc[-1]) if len(df) >= 15 else 0.0
+                prev = float(df["close"].iloc[-2]) if len(df) >= 2 else None
             except Exception as e:
                 self.log(f"Daily check failed: {e}"[:200], "alert")
                 return {"error": str(e)}
-            self.signal = {**st, "checked_at": now.isoformat(timespec="minutes")}
+            day_chg = round((st["close"] / prev - 1) * 100, 2) if prev else None
+            self.signal = {**st, "day_change_pct": day_chg, "checked_at": now.isoformat(timespec="minutes")}
+            self._why = self._why_items(st, day_chg)
             pos = self.position if self.active else None
             what = f"{self.cfg.index} {st['close']:,.0f} · {self.cfg.fast}-day avg {st['fast']:,.0f} vs {self.cfg.slow}-day {st['slow']:,.0f}"
             if pos is not None:
@@ -469,6 +480,9 @@ class SwingTrader:
                     self.log(f"Trend still UP ({what}) — holding {pos.spec.tradingsymbol}", "info")
             elif st["trend"] == "UP" and getattr(self, "wait_cross", False):
                 self.log(f"Trend is UP ({what}) but the trailing exit sold this move — waiting for the next fresh uptrend", "info")
+            elif st["trend"] == "UP" and self.cfg.red_day_wait and day_chg is not None and day_chg < 0:
+                self.log(f"Trend is UP ({what}) but {self.cfg.index} is DOWN {day_chg:.2f}% today — not starting a new buy "
+                         f"on a red day; checks again at {self.cfg.check_time} on the next trading day", "info")
             elif st["trend"] == "UP":
                 self.log(f"Trend is UP ({what}) → buying a monthly in-the-money CE", "signal")
                 self._open(now)
@@ -477,6 +491,32 @@ class SwingTrader:
                 self.log(f"Trend is DOWN ({what}) — staying out", "info")
             self._changed()
             return self.signal
+
+    def _why_items(self, st: dict, day_chg: float | None) -> list[dict]:
+        f, s_ = self.cfg.fast, self.cfg.slow
+        items = [{"group": "strategy", "ok": True, "label": f"Swing trend {f}/{s_}: holds for weeks while the {f}-day average of "
+                  f"{self.cfg.index} is above its {s_}-day average. One red day does not change that."},
+                 {"group": "indicators", "ok": st["trend"] == "UP", "label": f"{f}-day avg {st['fast']:,.0f} vs {s_}-day avg {st['slow']:,.0f} "
+                  f"({st['gap_pct']:+.2f}%) → trend {st['trend']}" + (f" since {st['since']}" if st.get("since") else "")}]
+        if day_chg is not None:
+            items.append({"group": "market", "ok": day_chg >= 0, "label": f"{self.cfg.index} today {st['close']:,.0f} ({day_chg:+.2f}% vs yesterday)"})
+        return items
+
+    def _preview(self, now: datetime) -> dict:
+        try:
+            df = self.daily_frame(now)
+            st = trend_state(df["close"], self.cfg.fast, self.cfg.slow)
+            prev = float(df["close"].iloc[-2]) if len(df) >= 2 else None
+        except Exception as e:
+            self.log(f"Check failed: {e}"[:200], "alert")
+            return {"error": str(e)}
+        chg = round((st["close"] / prev - 1) * 100, 2) if prev else None
+        act = ("hold" if self.active else "would buy" if not (self.cfg.red_day_wait and chg is not None and chg < 0) else "would wait (red day)") \
+            if st["trend"] == "UP" else ("would sell" if self.active else "stay out")
+        self.log(f"Preview at {now:%H:%M}: trend {st['trend']} ({self.cfg.fast}-day {st['fast']:,.0f} vs {self.cfg.slow}-day {st['slow']:,.0f}), "
+                 f"{self.cfg.index} {f'{chg:+.2f}%' if chg is not None else '—'} today → {act}. No order now: the decision is made at {self.cfg.check_time} on the closing price", "info")
+        self._changed()
+        return {**st, "day_change_pct": chg, "preview": True, "action": act}
 
     MIN_STOP_PCT = 10  # a swing stop closer than this to the entry is just daily noise — use fewer lots instead
 
@@ -506,6 +546,7 @@ class SwingTrader:
             self.log(f"No price for {c.tradingsymbol} — not buying", "alert")
             return None
         lots, why = self.lots_for(ref, c.lot_size)
+        why_lots = why
         if lots < 1:
             cap_note = f"your premium cap ₹{cfg.max_premium:,.0f}" if cfg.max_premium else f"this strategy's money ₹{self.equity:,.0f}"
             self.log(f"1 lot of {c.tradingsymbol} costs ₹{ref * c.lot_size:,.0f}, more than {cap_note} allows — not buying", "alert")
@@ -521,6 +562,7 @@ class SwingTrader:
             if fit < lots:
                 why += f"; {fit} lot{'s' if fit > 1 else ''} to keep the loss under ₹{cap:,.0f}"
                 lots = fit
+                why_lots = why
             stop_pct = min(cfg.disaster_stop_pct, cap / (lots * c.lot_size * ref) * 100)
             cap_note = f" · max loss ₹{cap:,.0f} ({cfg.max_loss_pct:g}% of money)"
         spec = PositionSpec(exchange=c.exchange, tradingsymbol=c.tradingsymbol, instrument_token=c.instrument_token,
@@ -529,7 +571,14 @@ class SwingTrader:
         risk = RiskConfig.from_dict({"sl_mode": "pct", "sl_value": round(stop_pct, 2), "target_mode": "none",
                                      "trail_mode": "none", "min_sl_pct": 1.0, "max_sl_pct": 95.0})
         p = ManagedPosition(spec, risk, cfg.mode, self.deps.kite_getter)
-        p.stats.update({"entry_type": "swing", "why": [f"{cfg.fast}/{cfg.slow}-day trend UP", "roll" if roll else "new trend"],
+        why = list(getattr(self, "_why", []) or [])
+        why += [{"group": "contract", "ok": True, "label": f"{c.tradingsymbol}: monthly expiry {c.expiry} "
+                 f"({self.days_left(c.expiry, now.date())} days left), {cfg.itm_strikes} strike{'s' if cfg.itm_strikes > 1 else ''} in the money "
+                 f"(index {spot:,.0f}, strike {c.strike:g})" + (" — ROLL of the expiring contract" if roll else "")},
+                {"group": "risk", "ok": True, "label": f"{lots} lot{'s' if lots > 1 else ''}: {why_lots}"},
+                {"group": "risk", "ok": True, "label": f"Stop −{stop_pct:.0f}% on the premium{cap_note}; no target — "
+                 f"it sells when the trend turns DOWN, on the crash guard, or rolls near expiry"}]
+        p.stats.update({"entry_type": "swing", "why": why,
                         "index": cfg.index, "spot_at_entry": spot, "strategy_name": f"Swing trend {cfg.fast}/{cfg.slow}"})
         p.preview(ref)
         self.register_position(p)

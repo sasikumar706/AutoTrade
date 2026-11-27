@@ -251,3 +251,34 @@ def test_loss_cap_off_keeps_emergency_stop_and_cap_trims_lots():
     w2.on_clock(datetime(2026, 10, 28, 15, 16))
     q = reg2[0]
     assert q.spec.lots == 2 and (q.entry_price - q.stop) * q.spec.qty <= 200000 * 0.02 * 1.03
+
+
+def test_red_day_does_not_start_a_new_buy():
+    w, reg, _ = make_swing(trend=+10.0, spot=24000.0)  # yesterday 24190 → today 24000: trend still UP, day −0.8%
+    w.enabled = True
+    w.on_clock(datetime(2026, 10, 28, 15, 16))
+    assert reg == [] and w.signal["trend"] == "UP" and w.signal["day_change_pct"] < 0
+    assert "red day" in w.timeline[-1]["msg"]
+    off, reg2, _ = make_swing(trend=+10.0, spot=24000.0, red_day_wait=False)
+    off.enabled = True
+    off.on_clock(datetime(2026, 10, 28, 15, 16))
+    assert len(reg2) == 1
+
+
+def test_check_now_before_decision_time_only_previews():
+    w, reg, _ = make_swing(trend=+10.0)
+    w.enabled = True
+    r = w.check(datetime(2026, 10, 28, 11, 14), trade=w.in_window(datetime(2026, 10, 28, 11, 14)))
+    assert r["preview"] and r["action"] == "would buy" and reg == [] and w.last_check is None
+    w.on_clock(datetime(2026, 10, 28, 15, 16))  # the real decision still happens at 15:15
+    assert len(reg) == 1
+
+
+def test_swing_buy_carries_its_reasons():
+    w, reg, _ = make_swing(trend=+10.0)
+    w.enabled = True
+    w.on_clock(datetime(2026, 10, 28, 15, 16))
+    why = reg[0].stats["why"]
+    assert all(isinstance(x, dict) and {"group", "ok", "label"} <= set(x) for x in why)
+    text = " ".join(x["label"] for x in why)
+    assert "10-day avg" in text and "today" in text and "monthly expiry" in text and "Stop" in text

@@ -35,7 +35,7 @@ export function PositionRow({ p, onPress, onClose }: { p: PositionSnap; onPress:
           : !quiet ? <Badge text={p.state.replace(/_/g, " ")} color={stateColor(p.state)} /> : null}
       </View>
       <Text style={[s.muted, { fontSize: 12 }]}>
-        {when(p.entry_time ?? p.created).split(" ").slice(-1)[0]}{p.exit_time ? ` → ${when(p.exit_time).split(" ").slice(-1)[0]}` : ""} · SL {p.stop ?? "—"} · T {p.target ?? "—"}
+        {({ auto: "⚡ Auto", swing: "📈 Swing" } as Record<string, string>)[String(p.spec.source ?? "").split(":")[0]] ?? "✋ You"} · {when(p.entry_time ?? p.created)}{p.exit_time ? ` → ${when(p.exit_time).split(" ").slice(-1)[0]}` : ""} · SL {p.stop ?? "—"} · T {p.target ?? "—"}
       </Text>
       {p.message && !quiet ? <Text style={{ color: stateColor(p.state), fontSize: 12 }} numberOfLines={2}>{p.message}</Text> : null}
       {open && onClose && <Btn label={long ? "Exit (SELL)" : "Exit (BUY)"} kind="danger" onPress={onClose} />}

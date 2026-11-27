@@ -1076,7 +1076,7 @@ class OptionsManager:
         elif action == "close_position":
             w.close_now()
         elif action == "check_now":
-            w.check(now)
+            w.check(now, trade=w.in_window(now) and is_trading_day(now.date(), self.deps.data_dir))
         else:
             raise ValueError("action must be enable, disable, close_position or check_now")
         self._save_swing(w)

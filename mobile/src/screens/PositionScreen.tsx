@@ -16,7 +16,10 @@ export default function PositionScreen({ route }: any) {
       const x = await api.position(id);
       setP(x);
       setErr(null);
-      if (x.spec.source?.startsWith("auto:") && why === null) {
+      const own = (x.stats as any)?.why;
+      if (why === null && Array.isArray(own) && own.length && typeof own[0] === "object") {
+        setWhy(own as WhyItem[]); // Swing (and any trade that saved its own reasons)
+      } else if (x.spec.source?.startsWith("auto:") && why === null) {
         const a = await api.auto(x.spec.source.slice(5)).catch(() => null);
         const sig = a?.signals.find((g) => g.position_id === x.id);
         setWhy((sig?.why as WhyItem[]) ?? []);
@@ -54,7 +57,7 @@ export default function PositionScreen({ route }: any) {
       </Card>
       <ErrorText msg={err} />
       {(open || (p.booked?.length ?? 0) > 0) && (p.stats?.risk_live || (p.booked?.length ?? 0) > 0) ? <RiskMonitor p={p} open={open} /> : null}
-      {why && why.length > 0 && <Card title="Why Auto Trade placed this order"><WhyList why={why} /></Card>}
+      {why && why.length > 0 && <Card title={p.spec.source?.startsWith("swing:") ? "Why Swing bought this" : "Why Auto Trade placed this order"}><WhyList why={why} /></Card>}
       {(p.path?.length ?? 0) > 1 && (
         <Card title="Premium since entry">
           <LineChart values={p.path!.map((x) => x[1])} color={pnlColor(pnl) === C.text ? C.blue : pnlColor(pnl)} height={170}
